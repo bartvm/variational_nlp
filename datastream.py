@@ -13,16 +13,7 @@ logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def get_ngram_stream(ngram_order, which_set, which_partitions,
-                     vocab_size=None):
-    """Return an iterator over n-grams.
-
-    Notes
-    -----
-    This reads the text files sequentially. However, note that the files are
-    already shuffled.
-
-    """
+def get_vocabulary(vocab_size):
     # Load the word counts
     logger.info('Loading vocabulary')
     with open(os.path.join(config.data_path, '1-billion-word/processed/'
@@ -40,6 +31,19 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
     # Limit the vocabulary size
     if vocab_size is not None:
         vocabulary = OrderedDict(islice(vocabulary.items(), vocab_size))
+    return vocabulary
+
+
+def get_ngram_stream(ngram_order, which_set, which_partitions,
+                     vocabulary):
+    """Return an iterator over n-grams.
+
+    Notes
+    -----
+    This reads the text files sequentially. However, note that the files are
+    already shuffled.
+
+    """
 
     # Construct data stream
     logger.info('Constructing data stream')
@@ -52,5 +56,6 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
 if __name__ == "__main__":
     # Test
-    stream = get_ngram_stream(6, 'training', range(1, 10), vocab_size=10000)
+    vocabulary = get_vocabulary(50000)
+    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
     next(stream.get_epoch_iterator())
