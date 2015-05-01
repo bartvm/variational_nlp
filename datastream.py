@@ -5,8 +5,10 @@ from itertools import chain, count, islice
 
 from fuel import config
 from fuel.datasets import OneBillionWord
+from fuel.transformers import Mapping, Batch, Padding, Filter
 from fuel.transformers.text import NGrams
 from six import iteritems
+from fuel.schemes import ConstantScheme
 from six.moves import cPickle, zip
 
 logging.basicConfig(level='INFO')
@@ -54,8 +56,40 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
     return n_gram_stream
 
 
+def _filter_long(data):
+    return len(data[0]) <= 100
+    
+def _shift_words(sample):
+    sentence = sample[0]
+    result = sentence[1:]
+    return (result,)
+    
+def get_sentence_stream(which_set, which_partitions, vocabulary):
+    """Return an iterator over sentences
+
+    Notes
+    -----
+    This reads the text files sequentially. However, note that the files are
+    already shuffled.
+
+    """
+    # Construct data stream
+    logger.info('Constructing data stream')
+    dataset = OneBillionWord(which_set, which_partitions, vocabulary)
+    data_stream = dataset.get_example_stream()
+    
+    # Get rid of long sentences that don't fit
+    data_stream = Filter(data_stream, _filter_long)
+
+    # Creates the dataset "targets"
+    data_stream = Mapping(data_stream, _shift_words, add_sources=("targets",))
+    
+    return data_stream
+        
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
-    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
-    next(stream.get_epoch_iterator())
+#    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
+#    next(stream.get_epoch_iterator())
+    stream = get_sentence_stream('training', range(1,10), vocabulary)
+    print next(stream.get_epoch_iterator())
