@@ -25,9 +25,9 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
                         
     # Construct the model
     x = tensor.lmatrix('features')
-    x_mask = tensor.bmatrix('features_mask')
+    x_mask = tensor.fmatrix('features_mask')
     y = tensor.lmatrix('targets')
-    y_mask = tensor.bmatrix('targets_mask')
+    y_mask = tensor.fmatrix('targets_mask')
     
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
@@ -44,23 +44,37 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     
     pre_recurrent = linear.apply(embeddings)
     after_recurrent = hidden.apply(inputs=pre_recurrent, 
-                                   mask=x_mask.dimshuffle(1,0))[:-1]
+                                   mask=x_mask.T)[:-1]
     presoft = top_linear.apply(after_recurrent)
     
     # Give y as a vector and reshape presoft to 2D tensor
-    y = y * y_mask
-    y = y.dimshuffle(1,0).flatten()
+    y = y.flatten()
+    
     shape = presoft.shape
+    presoft = presoft.dimshuffle(1,0,2)
     presoft = presoft.reshape((shape[0] * shape[1], shape[2]))
     
-    cost = Softmax().categorical_cross_entropy(y, presoft)
+    # Build cost_matrix
+    presoft = presoft - presoft.max(axis=1).dimshuffle(0, 'x')
+    log_prob = presoft - tensor.log(tensor.exp(presoft).sum(axis=1).dimshuffle(0, 'x'))
+    flat_log_prob = log_prob.flatten()
+    range_ = tensor.arange(y.shape[0])
+    flat_indices = y + range_ * presoft.shape[1]
+    cost_matrix = flat_log_prob[flat_indices]
+    
+    # Mask useless values from the cost_matrix
+    cost_matrix = - cost_matrix * y_mask.flatten()
 
+    # Average the cost
+    cost = cost_matrix.sum()
+    cost = cost / y_mask.sum()
+    
     # Initialize parameters
     for brick in (lookup, linear, hidden, top_linear):
         brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
-
+        
     return cost
 
 
@@ -89,7 +103,7 @@ if __name__ == "__main__":
     cost = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
     train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary),
-                                iteration_scheme=ConstantScheme(64)), mask_dtype="int8")
+                                iteration_scheme=ConstantScheme(64)))
     valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
-                                iteration_scheme=ConstantScheme(256)), mask_dtype="int8")
+                                iteration_scheme=ConstantScheme(256)))
     train_model(cost, train_stream, valid_stream)
