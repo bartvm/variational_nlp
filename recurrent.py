@@ -125,13 +125,12 @@ if __name__ == "__main__":
     # Build training and validation datasets
     train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(64)))
-                                
-    validation_stream = get_sentence_stream('heldout', [1], vocabulary)
-    valid_stream = Padding(Batch(validation_stream,
+
+    valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
-    valid_stream_frequent = Padding(Batch(validation_stream,
+    valid_stream_frequent = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
-    valid_stream_rare = Padding(Batch(validation_stream,
+    valid_stream_rare = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
                                 
     # Train

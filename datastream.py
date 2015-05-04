@@ -56,12 +56,12 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
     return n_gram_stream
 
 
-def get_frequent(n_gram_stream, vocabulary):
-    """Return an iterator over n-grams which are followed by a frequent word"""
+def get_frequent(data):
+    """Define the funcion that will filters the frequent words"""
     #TODO implement
 
 def get_rare(n_gram_stream, vocabulary):
-    """Return an iterator over n-grams which are followed by a rare word"""
+    """Define the funcion that will filters the rare words"""
     #TODO implement
 
 
@@ -98,8 +98,10 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
-#    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
-#    next(stream.get_epoch_iterator())
-    stream = get_sentence_stream('training', range(1,10), vocabulary)
-    print next(stream.get_epoch_iterator())
+    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
+    
+#    stream = get_sentence_stream('training', range(1,10), vocabulary)
+    stream_rare = get_frequent(stream, vocabulary)
+    print next(stream_rare.get_epoch_iterator())
+    print next(stream_rare.get_epoch_iterator())
 

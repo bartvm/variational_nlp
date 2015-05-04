@@ -11,7 +11,7 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
-from fuel.transformers import Batch
+from fuel.transformers import Batch, Filter
 from fuel.schemes import ConstantScheme
 from theano import tensor
 
@@ -95,12 +95,13 @@ if __name__ == "__main__":
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
                          iteration_scheme=ConstantScheme(64))
                          
-    validation_stream = get_ngram_stream(6, 'heldout', [1], vocabulary)
-    valid_stream = Batch(validation_stream,
+    valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
                          iteration_scheme=ConstantScheme(256))   
-    valid_stream_frequent = Batch(get_frequent(validation_stream),
+    valid_stream_frequent = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary),
+                                               get_frequent),
                          iteration_scheme=ConstantScheme(256))
-    valid_stream_rare = Batch(get_rare(validation_stream),
+    valid_stream_rare = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary), 
+                                       get_rare),
                          iteration_scheme=ConstantScheme(256))
 
     # Train
