@@ -3,6 +3,8 @@ import logging
 from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.bricks.lookup import LookupTable
+from blocks.dump import load_parameter_values
+from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
 from blocks.extensions.monitoring import DataStreamMonitoring
 from blocks.graph import ComputationGraph
@@ -12,8 +14,7 @@ from blocks.model import Model
 from fuel.transformers import Batch
 from fuel.schemes import ConstantScheme
 from theano import tensor
-from blocks.dump import load_parameter_values
-from blocks.dump import MainLoopDumpManager
+
 
 from datastream import get_vocabulary, get_ngram_stream
 

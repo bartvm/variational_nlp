@@ -93,3 +93,4 @@ if __name__ == "__main__":
 #    next(stream.get_epoch_iterator())
     stream = get_sentence_stream('training', range(1,10), vocabulary)
     print next(stream.get_epoch_iterator())
+

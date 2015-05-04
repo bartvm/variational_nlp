@@ -4,6 +4,8 @@ from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Linear, Softmax, Tanh
 from blocks.bricks.recurrent import SimpleRecurrent
 from blocks.bricks.lookup import LookupTable
+from blocks.dump import load_parameter_values
+from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
 from blocks.extensions.monitoring import DataStreamMonitoring
 from blocks.graph import ComputationGraph
@@ -13,6 +15,7 @@ from blocks.model import Model
 from fuel.transformers import Batch, Padding
 from fuel.schemes import ConstantScheme
 from theano import tensor
+
 
 from datastream import get_vocabulary, get_sentence_stream
 
@@ -121,3 +124,4 @@ if __name__ == "__main__":
     valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
     train_model(cost, train_stream, valid_stream, load_location="trained_recurrent/params.npz", save_location="trained_recurrent")
+
