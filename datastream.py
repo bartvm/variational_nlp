@@ -55,19 +55,28 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
     return n_gram_stream
 
-def frequencies(vocabulary):
+def frequencies(vocabulary, nb_words):
     freq = OrderedDict(sorted(vocabulary.items(), key=lambda item: item[1]))
-    rare_words=list(islice(freq.items(), 100))
-    frequent_words=list(islice(OrderedDict(reversed(freq.items())).items(), 100))
+    rare_words=OrderedDict(islice(freq.items(), nb_words))
+    frequent_words=OrderedDict(islice(OrderedDict(reversed(freq.items())).items(), nb_words))
     return rare_words, frequent_words
 
-def get_frequent(data):
+def _frequent(data, frequent):
     """Define the funcion that will filters the frequent words"""
-    #TODO implement
+    return data[1] in frequent.keys()
 
-def get_rare(n_gram_stream, vocabulary):
+def _rare(data, rare):
     """Define the funcion that will filters the rare words"""
-    #TODO implement
+    return data[1] in rare.keys()
+
+def filter_frequent(data_stream):
+    # TODO filter the frequent words
+    return
+
+def filter_rare(data_stream):
+    # TODO filter the rare words
+    return
+
 
 
 def _filter_long(data):
@@ -103,11 +112,11 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
-    rare, frequent = frequencies(vocabulary)
-    print type(rare)
-    print type(frequent)
+    rare, frequent = frequencies(vocabulary, 100)
     
-#    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
+    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
+    
+#    print get_frequent(next(stream.get_epoch_iterator()), frequent)
 #    stream = get_sentence_stream('training', range(1,10), vocabulary)
 #    stream_rare = get_frequent(stream, vocabulary)
 #    print next(stream_rare.get_epoch_iterator())
