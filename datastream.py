@@ -56,6 +56,15 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
     return n_gram_stream
 
 
+def get_frequent(n_gram_stream, vocabulary):
+    """Return an iterator over n-grams which are followed by a frequent word"""
+    #TODO implement
+
+def get_rare(n_gram_stream, vocabulary):
+    """Return an iterator over n-grams which are followed by a rare word"""
+    #TODO implement
+
+
 def _filter_long(data):
     return len(data[0]) <= 100
     

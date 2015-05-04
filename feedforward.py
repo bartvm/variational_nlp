@@ -16,7 +16,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_ngram_stream
+from datastream import get_vocabulary, get_ngram_stream, get_frequent, get_rare
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -48,7 +48,9 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     return cost
 
 
-def train_model(cost, train_stream, valid_stream, load_location=None, save_location=None):
+def train_model(cost, train_stream, valid_stream,
+                load_location=None, 
+                save_location=None):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
@@ -88,8 +90,20 @@ if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, [128], [Rectifier()])
     vocabulary = get_vocabulary(50000)
+    
+    # Build training and validation datasets
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
                          iteration_scheme=ConstantScheme(64))
-    valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
+                         
+    validation_stream = get_ngram_stream(6, 'heldout', [1], vocabulary)
+    valid_stream = Batch(validation_stream,
+                         iteration_scheme=ConstantScheme(256))   
+    valid_stream_frequent = Batch(get_frequent(validation_stream),
                          iteration_scheme=ConstantScheme(256))
-    train_model(cost, train_stream, valid_stream, load_location="trained_feedforward/params.npz", save_location="trained_feedforward")
+    valid_stream_rare = Batch(get_rare(validation_stream),
+                         iteration_scheme=ConstantScheme(256))
+
+    # Train
+    train_model(cost, train_stream, valid_stream, 
+                load_location="trained_feedforward/params.npz", 
+                save_location="trained_feedforward")

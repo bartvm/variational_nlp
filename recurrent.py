@@ -81,7 +81,9 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     return cost
 
 
-def train_model(cost, train_stream, valid_stream, load_location=None, save_location=None):
+def train_model(cost, train_stream, valid_stream, 
+                load_location=None, 
+                save_location=None):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
@@ -119,9 +121,20 @@ if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
+    
+    # Build training and validation datasets
     train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(64)))
-    valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
+                                
+    validation_stream = get_sentence_stream('heldout', [1], vocabulary)
+    valid_stream = Padding(Batch(validation_stream,
                                 iteration_scheme=ConstantScheme(256)))
-    train_model(cost, train_stream, valid_stream, load_location="trained_recurrent/params.npz", save_location="trained_recurrent")
-
+    valid_stream_frequent = Padding(Batch(validation_stream,
+                                iteration_scheme=ConstantScheme(256)))
+    valid_stream_rare = Padding(Batch(validation_stream,
+                                iteration_scheme=ConstantScheme(256)))
+                                
+    # Train
+    train_model(cost, train_stream, valid_stream, 
+                load_location="trained_recurrent/params.npz", 
+                save_location="trained_recurrent")
