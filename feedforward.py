@@ -12,6 +12,8 @@ from blocks.model import Model
 from fuel.transformers import Batch
 from fuel.schemes import ConstantScheme
 from theano import tensor
+from blocks.dump import load_parameter_values
+from blocks.dump import MainLoopDumpManager
 
 from datastream import get_vocabulary, get_ngram_stream
 
@@ -45,11 +47,19 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     return cost
 
 
-def train_model(cost, train_stream, valid_stream):
+def train_model(cost, train_stream, valid_stream, load_location=None, save_location=None):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
+    
+    # Define the model
     model = Model(cost)
+    
+    # Load the parameters from a dumped model
+    if load_location is not None:
+        logger.info('Loading parameters...')
+        model.set_param_values(load_parameter_values(load_location))
+
     cg = ComputationGraph(cost)
     algorithm = GradientDescent(cost=cost, step_rule=Scale(learning_rate=0.01),
                                 params=cg.parameters)
@@ -63,7 +73,15 @@ def train_model(cost, train_stream, valid_stream):
             Printing()
         ]
     )
+
     main_loop.run()
+    
+    # Save the main loop
+    if save_location is not None:
+        logger.info('Saving the main loop...')
+        dump_manager = MainLoopDumpManager(save_location)
+        dump_manager.dump(main_loop)
+        logger.info('Saved')
 
 if __name__ == "__main__":
     # Test
@@ -73,4 +91,4 @@ if __name__ == "__main__":
                          iteration_scheme=ConstantScheme(64))
     valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
                          iteration_scheme=ConstantScheme(256))
-    train_model(cost, train_stream, valid_stream)
+    train_model(cost, train_stream, valid_stream, load_location="trained_feedforward/params.npz", save_location="trained_feedforward")
