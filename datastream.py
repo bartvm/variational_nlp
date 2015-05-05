@@ -106,6 +106,7 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
 
 def _get_last_word(sample):
     sentence = sample[0]
+
     result = sentence[-1]
     return (result,)
 
@@ -118,7 +119,7 @@ def get_sentence_stream_filter(which_set, which_partitions, vocabulary, dictionn
     data_stream = Filter(data_stream, _filter_long)
     
     # Create the dataset "targets"
-    data_stream = Mapping(data_stream, _get_last_word, add_sources=("targets",))
+    data_stream = Mapping(data_stream, _get_last_word, add_sources=("last_word",))
 
     filt = FilterWords(dictionnary)
     # Filter the frequent/rare last word
@@ -131,10 +132,10 @@ if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 100)
-    print test(vocabulary)   
     
-    stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
+    stream = get_sentence_stream_filter('training', range(1, 10), vocabulary, frequent)
     
+    print next(stream.get_epoch_iterator())
 #    print get_frequent(next(stream.get_epoch_iterator()), frequent)
 #    stream = get_sentence_stream('training', range(1,10), vocabulary)
 #    stream_rare = get_frequent(stream, vocabulary)
