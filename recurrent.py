@@ -136,7 +136,7 @@ if __name__ == "__main__":
     # Test
     cost, cost_val = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
-    rare, frequent = frequencies(vocabulary, 200)
+    rare, frequent = frequencies(vocabulary, 400, 100)
     
     # Build training and validation datasets
     train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary),

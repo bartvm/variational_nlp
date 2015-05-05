@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, [128], [Rectifier()])
     vocabulary = get_vocabulary(50000)
-    rare, frequent = frequencies(vocabulary, 200)
+    rare, frequent = frequencies(vocabulary, 200, 100)
     
     # Build training and validation datasets
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),

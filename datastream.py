@@ -3,9 +3,10 @@ import os
 from collections import OrderedDict
 from itertools import chain, count, islice
 
+from numpy.random import randint
 from fuel import config
 from fuel.datasets import OneBillionWord
-from fuel.transformers import Mapping, Batch, Padding, Filter
+from fuel.transformers import Mapping, Batch, Padding, Filter, Transformer
 from fuel.transformers.text import NGrams
 from six import iteritems
 from fuel.schemes import ConstantScheme
@@ -37,9 +38,9 @@ def get_vocabulary(vocab_size):
 
 
 # Vocabulary is already sorted by decreasing frequency
-def frequencies(vocabulary, nb_words):
-    frequent_words=OrderedDict(islice(vocabulary.items(), nb_words))
-    rare_words=OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), nb_words))
+def frequencies(vocabulary, nb_rare, nb_freq):
+    frequent_words=OrderedDict(islice(vocabulary.items(), nb_freq))
+    rare_words=OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), nb_rare))
     return rare_words, frequent_words
     
 
@@ -75,6 +76,9 @@ class FilterWords(object):
 
 def _filter_long(data):
     return len(data[0]) <= 100
+
+def _filter_short(data):
+    return len(data[0]) >= 6
     
 def _shift_words(sample):
     sentence = sample[0]
@@ -104,38 +108,61 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
     return data_stream
 
 
-def _get_last_word(sample):
-    sentence = sample[0]
+class SubSentence(Transformer):
+    """Return an iterator over all sub-sentences which start at the biginning
+    It also creates the target.
+    e.g.: [1, 2, 3, 4] will become: ([1],2), ([1,2],3), ([1,2,3],4)
+    """
 
-    result = sentence[-1]
-    return (result,)
+    def __init__(self, data_stream, target_source="last_word"):
+        super(SubSentence, self).__init__(data_stream)
+        self.sources = self.sources + (target_source,)
+        self.sentence = []
+        self.index = 0
+
+    def get_data(self, request=None):
+        while not self.index < len(self.sentence) - 1:
+            self.sentence, = next(self.child_epoch_iterator)
+            self.index = 0
+        sub = self.sentence[:self.index+1]
+        target = self.sentence[self.index+1]
+        self.index += 1
+        return (sub, target)
+
 
 # Function applied by the filter, that determine wether the word is frequent is in the list.
 def get_sentence_stream_filter(which_set, which_partitions, vocabulary, dictionnary):
     # Construct data stream
     dataset = OneBillionWord(which_set, which_partitions, vocabulary)
     data_stream = dataset.get_example_stream()
+
     # Get rid of long sentences that don't fit
     data_stream = Filter(data_stream, _filter_long)
     
-    # Create the dataset "targets"
-    data_stream = Mapping(data_stream, _get_last_word, add_sources=("last_word",))
+    # Cut the sentences randomly
+    data_stream = SubSentence(data_stream, target_source="last_word")
 
-    filt = FilterWords(dictionnary)
     # Filter the frequent/rare last word
+    filt = FilterWords(dictionnary)
     data_stream = Filter(data_stream, filt)
     
+    # Filter too short sentences
+    data_stream = Filter(data_stream, _filter_short)
+
     return data_stream
     
     
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
-    rare, frequent = frequencies(vocabulary, 100)
+    rare, frequent = frequencies(vocabulary, 5000, 100)
     
     stream = get_sentence_stream_filter('training', range(1, 10), vocabulary, frequent)
     
-    print next(stream.get_epoch_iterator())
+    for i in range(100):
+        print next(stream.get_epoch_iterator())
+
+
 #    print get_frequent(next(stream.get_epoch_iterator()), frequent)
 #    stream = get_sentence_stream('training', range(1,10), vocabulary)
 #    stream_rare = get_frequent(stream, vocabulary)
