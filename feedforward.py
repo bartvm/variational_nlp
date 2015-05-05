@@ -123,9 +123,9 @@ class FrequencyLikelihood(MonitoredQuantity):
             self.total_seen[freq] += 1
 
     def readout(self):
-        scores = np.zeros((len(self.summed_likelihood), 2))
+        scores = np.zeros((len(self.summed_likelihood), 3))
         for i, freq in enumerate(sorted(self.summed_likelihood.keys())):
-            scores[i] = [freq,
+            scores[i] = [freq, self.total_seen[freq],
                          self.summed_likelihood[freq] / self.total_seen[freq]]
         return scores
 
