@@ -11,12 +11,12 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
-from fuel.transformers import Batch
+from fuel.transformers import Batch, Filter
 from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_ngram_stream, filter_frequent, filter_rare
+from datastream import get_vocabulary, get_ngram_stream, frequencies, FilterWords
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     return cost
 
 
-def train_model(cost, train_stream, valid_stream,
+def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location=None):
     cost.name = 'nll'
@@ -72,11 +72,14 @@ def train_model(cost, train_stream, valid_stream,
         algorithm=algorithm,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid'),
+                                 prefix='valid_all'),
+            DataStreamMonitoring([cost, perplexity], valid_rare,
+                                 prefix='valid_rare'),
+            DataStreamMonitoring([cost, perplexity], valid_freq,
+                                 prefix='valid_frequent'),
             Printing()
         ]
     )
-
     main_loop.run()
     
     # Save the main loop
@@ -90,19 +93,25 @@ if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, [128], [Rectifier()])
     vocabulary = get_vocabulary(50000)
+    rare, frequent = frequencies(vocabulary, 200)
     
     # Build training and validation datasets
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
                          iteration_scheme=ConstantScheme(64))
-                         
     valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
                          iteration_scheme=ConstantScheme(256))   
-    valid_stream_frequent = Batch(filter_frequent(get_ngram_stream(6, 'heldout', [1], vocabulary)),
-                         iteration_scheme=ConstantScheme(256))
-    valid_stream_rare = Batch(filter_rare(get_ngram_stream(6, 'heldout', [1], vocabulary)),
-                         iteration_scheme=ConstantScheme(256))
+
+    filt_freq = FilterWords(frequent)
+    filt_rare = FilterWords(rare)
+    
+    valid_freq = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary), 
+                                         filt_freq),
+                                  iteration_scheme=ConstantScheme(256))
+    valid_rare = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary), 
+                                     filt_rare),
+                              iteration_scheme=ConstantScheme(256))
 
     # Train
-    train_model(cost, train_stream, valid_stream, 
-                load_location="trained_feedforward/params.npz", 
+    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+                load_location=None, 
                 save_location="trained_feedforward")

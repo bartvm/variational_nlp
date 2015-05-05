@@ -61,21 +61,13 @@ def frequencies(vocabulary, nb_words):
     frequent_words=OrderedDict(islice(OrderedDict(reversed(freq.items())).items(), nb_words))
     return rare_words, frequent_words
 
-def _frequent(data, frequent):
-    """Define the funcion that will filters the frequent words"""
-    return data[1] in frequent.keys()
+class FilterWords(object):
+    def __init__(self, dictionary):
+        self.dictionary = dictionary
 
-def _rare(data, rare):
-    """Define the funcion that will filters the rare words"""
-    return data[1] in rare.keys()
-
-def filter_frequent(data_stream):
-    # TODO filter the frequent words
-    return
-
-def filter_rare(data_stream):
-    # TODO filter the rare words
-    return
+    def __call__(self, batch):
+        ngram, target = batch
+        return target in self.dictionary.values()
 
 
 
