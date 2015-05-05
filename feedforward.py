@@ -84,7 +84,7 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
     )
     main_loop.run()
 
-    # Save the main loop
+    #Save the main loop
     if save_location is not None:
         logger.info('Saving the main loop...')
         dump_manager = MainLoopDumpManager(save_location)
