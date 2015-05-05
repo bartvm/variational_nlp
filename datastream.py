@@ -55,12 +55,16 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
     return n_gram_stream
 
+# Vocabulary is already sorted by decreasing frequency
 def frequencies(vocabulary, nb_words):
-    freq = OrderedDict(sorted(vocabulary.items(), key=lambda item: item[1]))
-    rare_words=OrderedDict(islice(freq.items(), nb_words))
-    frequent_words=OrderedDict(islice(OrderedDict(reversed(freq.items())).items(), nb_words))
+    frequent_words=OrderedDict(islice(vocabulary.items(), nb_words))
+    rare_words=OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), nb_words))
     return rare_words, frequent_words
 
+def test(vocabulary):
+    test = OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), 100))   
+    return test
+    
 class FilterWords(object):
     def __init__(self, dictionary):
         self.dictionary = dictionary
@@ -105,6 +109,7 @@ if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 100)
+    print test(vocabulary)   
     
     stream = get_ngram_stream(6, 'training', range(1, 10), vocabulary)
     
