@@ -36,6 +36,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     y_mask = tensor.fmatrix('targets_mask')
     # Batch X Time
     frequency_mask = tensor.fmatrix('frequency_mask')
+    frequency_mask_mask = tensor.fmatrix('frequency_mask_mask')
 
     # Only for the validation
     last_word = tensor.lvector('last_word')
@@ -80,7 +81,9 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     cost_matrix = flat_log_prob[flat_indices]
 
     # Mask useless values from the cost_matrix
-    cost_matrix = - cost_matrix * y_mask.flatten() * frequency_mask.flatten()
+    cost_matrix = - cost_matrix * \
+        y_mask.flatten() * frequency_mask.flatten() * \
+        frequency_mask_mask.flatten()
 
     # Average the cost
     cost = cost_matrix.sum()
