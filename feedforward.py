@@ -72,12 +72,12 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         algorithm=algorithm,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid_all'),
+                                 prefix='valid_all', every_n_batches=5000),
             DataStreamMonitoring([cost, perplexity], valid_rare,
-                                 prefix='valid_rare'),
+                                 prefix='valid_rare', every_n_batches=5000),
             DataStreamMonitoring([cost, perplexity], valid_freq,
-                                 prefix='valid_frequent'),
-            Printing()
+                                 prefix='valid_frequent', every_n_batches=5000),
+            Printing(every_n_batches=5000)
         ]
     )
     main_loop.run()
