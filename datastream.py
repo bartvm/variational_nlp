@@ -36,6 +36,13 @@ def get_vocabulary(vocab_size):
     return vocabulary
 
 
+# Vocabulary is already sorted by decreasing frequency
+def frequencies(vocabulary, nb_words):
+    frequent_words=OrderedDict(islice(vocabulary.items(), nb_words))
+    rare_words=OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), nb_words))
+    return rare_words, frequent_words
+    
+
 def get_ngram_stream(ngram_order, which_set, which_partitions,
                      vocabulary):
     """Return an iterator over n-grams.
@@ -55,24 +62,15 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
     return n_gram_stream
 
-# Vocabulary is already sorted by decreasing frequency
-def frequencies(vocabulary, nb_words):
-    frequent_words=OrderedDict(islice(vocabulary.items(), nb_words))
-    rare_words=OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), nb_words))
-    return rare_words, frequent_words
 
-def test(vocabulary):
-    test = OrderedDict(islice(OrderedDict(reversed(vocabulary.items())).items(), 100))   
-    return test
-    
-class FilterWords(object):
+# Function applied by the filter, that determine wether the word is frequent is in the list.
+class FilterWordsNgram(object):
     def __init__(self, dictionary):
         self.dictionary = dictionary
 
     def __call__(self, batch):
         ngram, target = batch
         return target in self.dictionary.values()
-
 
 
 def _filter_long(data):
@@ -104,7 +102,16 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
     data_stream = Mapping(data_stream, _shift_words, add_sources=("targets",))
     
     return data_stream
-        
+
+
+# Function applied by the filter, that determine wether the word is frequent is in the list.
+class FilterWordsSentence(object):
+    def __init__(self, dictionary):
+        self.dictionary = dictionary
+
+    def __call__(self, batch):
+        # TODO
+
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)

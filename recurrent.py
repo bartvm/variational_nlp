@@ -17,7 +17,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_sentence_stream
+from datastream import get_vocabulary, get_sentence_stream, frequencies, FilterWordSentence
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -121,6 +121,7 @@ if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
+    rare, frequent = frequencies(vocabulary, 200)
     
     # Build training and validation datasets
     train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary),

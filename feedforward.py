@@ -16,7 +16,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_ngram_stream, frequencies, FilterWords
+from datastream import get_vocabulary, get_ngram_stream, frequencies, FilterWordsNgram
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -101,8 +101,8 @@ if __name__ == "__main__":
     valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
                          iteration_scheme=ConstantScheme(256))   
 
-    filt_freq = FilterWords(frequent)
-    filt_rare = FilterWords(rare)
+    filt_freq = FilterWordsNgram(frequent)
+    filt_rare = FilterWordsNgram(rare)
     
     valid_freq = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary), 
                                          filt_freq),
