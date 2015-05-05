@@ -118,7 +118,7 @@ def get_sentence_stream_filter(which_set, which_partitions, vocabulary, dictionn
     data_stream = Filter(data_stream, _filter_long)
     
     # Create the dataset "targets"
-    data_stream = Mapping(data_stream, _get_last_word, add_sources=("last_word",))
+    data_stream = Mapping(data_stream, _get_last_word, add_sources=("targets",))
 
     filt = FilterWords(dictionnary)
     # Filter the frequent/rare last word

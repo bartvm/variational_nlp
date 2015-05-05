@@ -31,7 +31,6 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     x_mask = tensor.fmatrix('features_mask')
     y = tensor.lmatrix('targets')
     y_mask = tensor.fmatrix('targets_mask')
-    last_word = tensor.fmatrix('last_word')
         
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
@@ -47,10 +46,17 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     embeddings = embeddings.dimshuffle(1, 0, 2)  # Give time as the first index: Time X Batch X embedding_dim
     
     pre_recurrent = linear.apply(embeddings)
+
     after_recurrent = hidden.apply(inputs=pre_recurrent, 
                                    mask=x_mask.T)[:-1]
+
+    # In the case where it's the validation dataset
+    if y.shape[1] == 1:
+        after_recurrent = after_recurrent[-1]
+
     presoft = top_linear.apply(after_recurrent)
-    
+
+
     # Give y as a vector and reshape presoft to 2D tensor
     y = y.flatten()
     
@@ -73,9 +79,6 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     cost = cost_matrix.sum()
     cost = cost / y_mask.sum()
     
-    # Below is to get the cost for just the last word prediction
-    # TODO 
-    
     
     # Initialize parameters
     for brick in (lookup, linear, hidden, top_linear):
@@ -83,18 +86,15 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
         brick.biases_init = Constant(0.)
         brick.initialize()
         
-    return cost, cost_val
+    return cost
 
 
-def train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
+def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location=None):
     cost.name = 'nll'
-    cost_val.name = "nll_val"
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
-    perplexity_val = 2 ** (cost_val / tensor.log(2))
-    perplexity_val.name = "ppl_val"
     
     # Define the model
     model = Model(cost)
@@ -114,9 +114,9 @@ def train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_ra
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
                                  prefix='valid'),
-            DataStreamMonitoring([cost_val, perplexity_val], valid_rare,
+            DataStreamMonitoring([cost, perplexity], valid_rare,
                                  prefix='valid_rare'),
-            DataStreamMonitoring([cost_val, perplexity_val], valid_freq,
+            DataStreamMonitoring([cost, perplexity], valid_freq,
                                  prefix='valid_frequent'),
             Printing()
         ]
@@ -132,7 +132,7 @@ def train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_ra
 
 if __name__ == "__main__":
     # Test
-    cost, cost_val = construct_model(50000, 256, 6, 200, Tanh())
+    cost = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 200)
     
@@ -150,6 +150,6 @@ if __name__ == "__main__":
                                 iteration_scheme=ConstantScheme(256)))
                                 
     # Train
-    train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
+    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location="trained_recurrent")
