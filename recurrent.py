@@ -31,7 +31,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     x_mask = tensor.fmatrix('features_mask')
     y = tensor.lmatrix('targets')
     y_mask = tensor.fmatrix('targets_mask')
-        
+    last_word = tensor.lvector('last_word')
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
     
@@ -49,14 +49,11 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
 
     after_recurrent = hidden.apply(inputs=pre_recurrent, 
                                    mask=x_mask.T)[:-1]
-
-    # In the case where it's the validation dataset
-    if y.shape[1] == 1:
-        after_recurrent = after_recurrent[-1]
+    after_recurrent_last = after_recurrent[-1]
 
     presoft = top_linear.apply(after_recurrent)
 
-
+    # Define the cost
     # Give y as a vector and reshape presoft to 2D tensor
     y = y.flatten()
     
@@ -79,17 +76,22 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     cost = cost_matrix.sum()
     cost = cost / y_mask.sum()
     
+
+    # Define the validation cost
+    presoft_val = top_linear.apply(after_recurrent_last)
+    cost_val = Softmax().categorical_cross_entropy(last_word, presoft_val)
+
     
     # Initialize parameters
     for brick in (lookup, linear, hidden, top_linear):
         brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
-        
-    return cost
+
+    return cost, cost_val
 
 
-def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+def train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location=None):
     cost.name = 'nll'
@@ -114,9 +116,9 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
                                  prefix='valid', every_n_batches=5000),
-            DataStreamMonitoring([cost, perplexity], valid_rare,
+            DataStreamMonitoring([cost_val, perplexity], valid_rare,
                                  prefix='valid_rare', every_n_batches=5000),
-            DataStreamMonitoring([cost, perplexity], valid_freq,
+            DataStreamMonitoring([cost_val, perplexity], valid_freq,
                                  prefix='valid_frequent', every_n_batches=5000),
             Printing(every_n_batches=5000)
         ]
@@ -132,7 +134,7 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
 
 if __name__ == "__main__":
     # Test
-    cost = construct_model(50000, 256, 6, 200, Tanh())
+    cost, cost_val = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 200)
     
@@ -150,6 +152,6 @@ if __name__ == "__main__":
                                 iteration_scheme=ConstantScheme(256)))
                                 
     # Train
-    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+    train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location="trained_recurrent")
