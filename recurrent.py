@@ -17,7 +17,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_sentence_stream, frequencies, FilterWordSentence
+from datastream import get_vocabulary, get_sentence_stream, frequencies
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -129,6 +129,10 @@ if __name__ == "__main__":
 
     valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
+                                
+    filt_freq = FilterWordsSentence(frequent)
+    filt_rare = FilterWordsSentence(rare)
+    
     valid_stream_frequent = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
     valid_stream_rare = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),

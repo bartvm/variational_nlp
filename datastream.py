@@ -64,7 +64,7 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
 
 # Function applied by the filter, that determine wether the word is frequent is in the list.
-class FilterWordsNgram(object):
+class FilterWords(object):
     def __init__(self, dictionary):
         self.dictionary = dictionary
 
@@ -104,14 +104,29 @@ def get_sentence_stream(which_set, which_partitions, vocabulary):
     return data_stream
 
 
+def _get_last_word(sample):
+    sentence = sample[0]
+    result = sentence[-1]
+    return (result,)
+
 # Function applied by the filter, that determine wether the word is frequent is in the list.
-class FilterWordsSentence(object):
-    def __init__(self, dictionary):
-        self.dictionary = dictionary
+def get_sentece_stream_filter(which_set, which_partitions, vocabulary, dictionnary):
+    # Construct data stream
+    dataset = OneBillionWord(which_set, which_partitions, vocabulary)
+    data_stream = dataset.get_example_stream()
+    # Get rid of long sentences that don't fit
+    data_stream = Filter(data_stream, _filter_long)
+    
+    # Create the dataset "targets"
+    data_stream = Mapping(data_stream, _get_last_word, add_sources=("last_word",))
 
-    def __call__(self, batch):
-        # TODO
-
+    filt = FilterWords(dictionnary)
+    # Filter the frequent/rare last word
+    data_stream = Filter(data_stream, filt)
+    
+    return data_stream
+    
+    
 if __name__ == "__main__":
     # Test
     vocabulary = get_vocabulary(50000)
