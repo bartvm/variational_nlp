@@ -1,4 +1,6 @@
 import logging
+from collections import defaultdict
+import numpy as np
 
 from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Rectifier, MLP, Softmax
@@ -7,10 +9,13 @@ from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
 from blocks.extensions.monitoring import DataStreamMonitoring
+from blocks.filter import VariableFilter
 from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
+from blocks.monitoring.aggregation import MonitoredQuantity
+from blocks.roles import OUTPUT
 from fuel.transformers import Batch, Filter
 from fuel.schemes import ConstantScheme
 from theano import tensor
@@ -49,7 +54,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     return cost
 
 
-def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+def train_model(cost, train_stream, valid_stream, id_to_freq_mapping,
                 load_location=None, save_location=None):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
@@ -64,6 +69,13 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
+    targets, = [var for var in cg.inputs if var.name == 'targets']
+    activations, = VariableFilter(bricks=[MLP], roles=[OUTPUT])(cg.variables)
+    predictions = Softmax().apply(activations)
+    freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
+                                          requires=[targets, predictions],
+                                          name='freq_costs')
+
     algorithm = GradientDescent(cost=cost, step_rule=Scale(learning_rate=0.01),
                                 params=cg.parameters)
     main_loop = MainLoop(
@@ -71,14 +83,8 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid_all', every_n_batches=5000),
-            # Overfitting of rare words occurs between 3000 and 4000 iterations
-            DataStreamMonitoring([cost, perplexity], valid_rare,
-                                 prefix='valid_rare', every_n_batches=500),
-            DataStreamMonitoring([cost, perplexity], valid_freq,
-                                 prefix='valid_frequent',
-                                 every_n_batches=5000),
+            DataStreamMonitoring([freq_likelihood], valid_stream,
+                                 prefix='valid', every_n_batches=500),
             Printing(every_n_batches=500)
         ]
     )
@@ -91,10 +97,43 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         dump_manager.dump(main_loop)
         logger.info('Saved')
 
+
+class FrequencyLikelihood(MonitoredQuantity):
+    def __init__(self, word_counts, **kwargs):
+        """Calculate the likelihood as a function of word frequency.
+
+        Parameters
+        ----------
+        word_counts : dict
+            A dictionary mapping word indices (int) to their frequency
+            (int).
+
+        """
+        super(FrequencyLikelihood, self).__init__(**kwargs)
+        self.word_counts = word_counts
+
+    def initialize(self):
+        self.summed_likelihood = defaultdict(int)
+        self.total_seen = defaultdict(int)
+
+    def accumulate(self, targets, predictions):
+        for i, (target, prediction) in enumerate(zip(targets, predictions)):
+            freq = self.word_counts[target]
+            self.summed_likelihood[freq] += -np.log(prediction[target])
+            self.total_seen[freq] += 1
+
+    def readout(self):
+        scores = np.zeros((len(self.summed_likelihood), 2))
+        for i, freq in enumerate(sorted(self.summed_likelihood.keys())):
+            scores[i] = [freq,
+                         self.summed_likelihood[freq] / self.total_seen[freq]]
+        return scores
+
+
 if __name__ == "__main__":
     # Test
     cost = construct_model(50000, 256, 6, [128], [Rectifier()])
-    vocabulary = get_vocabulary(50000)
+    vocabulary, id_to_freq_mapping = get_vocabulary(50000, True)
     rare, frequent = frequencies(vocabulary, 200)
 
     # Build training and validation datasets
@@ -114,6 +153,5 @@ if __name__ == "__main__":
                        iteration_scheme=ConstantScheme(256))
 
     # Train
-    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
-                load_location=None,
-                save_location="trained_feedforward")
+    train_model(cost, train_stream, valid_stream, id_to_freq_mapping,
+                load_location=None, save_location="trained_feedforward")
