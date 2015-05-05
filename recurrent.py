@@ -17,7 +17,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_sentence_stream, frequencies
+from datastream import get_vocabulary, get_sentence_stream, frequencies, get_sentence_stream_filter
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -31,7 +31,8 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     x_mask = tensor.fmatrix('features_mask')
     y = tensor.lmatrix('targets')
     y_mask = tensor.fmatrix('targets_mask')
-    
+    last_word = tensor.fmatrix('last_word')
+        
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
     
@@ -72,21 +73,29 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
     cost = cost_matrix.sum()
     cost = cost / y_mask.sum()
     
+    # Below is to get the cost for just the last word prediction
+    # TODO 
+    
+    
     # Initialize parameters
     for brick in (lookup, linear, hidden, top_linear):
         brick.weights_init = IsotropicGaussian(0.01)
         brick.biases_init = Constant(0.)
         brick.initialize()
         
-    return cost
+    return cost, cost_val
 
 
-def train_model(cost, train_stream, valid_stream, 
+def train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None, 
                 save_location=None):
     cost.name = 'nll'
+    cost_val.name = "nll_val"
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
+    perplexity_val = 2 ** (cost_val / tensor.log(2))
+    perplexity_val.name = "ppl_val"
+    
     # Define the model
     model = Model(cost)
     
@@ -105,6 +114,10 @@ def train_model(cost, train_stream, valid_stream,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
                                  prefix='valid'),
+            DataStreamMonitoring([cost_val, perplexity_val], valid_rare,
+                                 prefix='valid_rare'),
+            DataStreamMonitoring([cost_val, perplexity_val], valid_freq,
+                                 prefix='valid_frequent'),
             Printing()
         ]
     )
@@ -119,7 +132,7 @@ def train_model(cost, train_stream, valid_stream,
 
 if __name__ == "__main__":
     # Test
-    cost = construct_model(50000, 256, 6, 200, Tanh())
+    cost, cost_val = construct_model(50000, 256, 6, 200, Tanh())
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 200)
     
@@ -129,16 +142,14 @@ if __name__ == "__main__":
 
     valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
                                 iteration_scheme=ConstantScheme(256)))
-                                
-    filt_freq = FilterWordsSentence(frequent)
-    filt_rare = FilterWordsSentence(rare)
-    
-    valid_stream_frequent = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
+
+
+    valid_freq = Padding(Batch(get_sentence_stream_filter('heldout', [1], vocabulary, frequent),
                                 iteration_scheme=ConstantScheme(256)))
-    valid_stream_rare = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary),
+    valid_rare = Padding(Batch(get_sentence_stream_filter('heldout', [1], vocabulary, rare),
                                 iteration_scheme=ConstantScheme(256)))
                                 
     # Train
-    train_model(cost, train_stream, valid_stream, 
-                load_location="trained_recurrent/params.npz", 
+    train_model(cost, cost_val, train_stream, valid_stream, valid_freq, valid_rare,
+                load_location=None, 
                 save_location="trained_recurrent")

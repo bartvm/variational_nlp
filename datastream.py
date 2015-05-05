@@ -110,7 +110,7 @@ def _get_last_word(sample):
     return (result,)
 
 # Function applied by the filter, that determine wether the word is frequent is in the list.
-def get_sentece_stream_filter(which_set, which_partitions, vocabulary, dictionnary):
+def get_sentence_stream_filter(which_set, which_partitions, vocabulary, dictionnary):
     # Construct data stream
     dataset = OneBillionWord(which_set, which_partitions, vocabulary)
     data_stream = dataset.get_example_stream()
