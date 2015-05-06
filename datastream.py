@@ -117,7 +117,7 @@ class add_frequency_mask(object):
 
     def __call__(self, batch):
         sentence, target = batch
-        return (vectorize(lambda index: index in self.dictionary)(target),)
+        return (vectorize(lambda index: index in self.dictionary.values())(target),)
 
 def add_frequency_all(batch):
     sentence, target = batch
