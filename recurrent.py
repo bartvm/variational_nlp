@@ -165,4 +165,4 @@ if __name__ == "__main__":
     # Train
     train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
                 load_location=None,
-                save_location="trained_recurrent")
+                save_location=None)
