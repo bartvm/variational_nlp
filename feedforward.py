@@ -1,7 +1,8 @@
 import logging
 import numpy
+from collections import OrderedDict
 
-from blocks.algorithms import GradientDescent, Scale
+from blocks.algorithms import GradientDescent, Scale, StepRule
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.bricks.lookup import LookupTable
 from blocks.dump import load_parameter_values
@@ -60,7 +61,7 @@ class VarianceRole(VariableRole):
 VARIANCE = VarianceRole()
 
 
-def make_variational(cost, cost_grads, learning_rate):
+def make_variational_model(cost):
     # Consider the weights to be the means, create variances
     cg = ComputationGraph(cost)
     sigmas = {}
@@ -72,25 +73,40 @@ def make_variational(cost, cost_grads, learning_rate):
     rng = MRG_RandomStreams()
     new_cg = cg.replace({param: rng.normal(param.shape, param, sigmas[param])
                          for param in cg.parameters})
+    return new_cg, sigmas
 
-    # Create mu and sigma for prior, and their updates
-    mu, sigma = shared_floatx(0), shared_floatx(1)
-    N = tensor.sum([param.size for param in cg.parameters])
-    mean_param = tensor.sum([param.sum() for param in new_cg.parameters]) / N
-    update_mu = (mu, mean_param)
-    update_sigma = (sigma, tensor.sum([tensor.sum(
-        tensor.sqr(param - mean_param)) for param in new_cg.parameters]) / N)
 
-    # Update variance based on cost
-    # NOTE: Sigma is actually sigma^2
-    sigma_error_losses = [0.5 * tensor.sqr(cost_grad)
-                          for cost_grad in cost_grads]
-    update_sigmas = [(sigmas[param],
-                      -0.5 * (1 / sigma - 1 / sigmas[param]) -
-                      sigma_error_losses) for param in new_cg.parameters]
-    update_mus= [(param,
-                 -(param - mu) / sigma ** 2 - cost_grads)
-                 for param in new_cg.parameters]
+class VariationaleInference(StepRule):
+    def __init__(self, cost, sigmas):
+        self.cost = cost
+        self.sigmas = sigmas
+
+    def compute_steps(self, previous_steps):
+        # previous_steps contains parameters and their gradients
+        params = previous_steps.keys()
+
+        # Create mu and sigma for prior, and their updates
+        mu, sigma = shared_floatx(0), shared_floatx(1)
+        N = sum([param.get_value().size for param in params])
+        mean_param = tensor.sum([param.sum() for param in params]) / N
+        update_mu = (mu, mean_param)
+        update_sigma = (sigma, tensor.sum([tensor.sum(
+            tensor.sqr(param - mean_param)) for param in params]) / N)
+
+        # Update variance based on cost
+        # NOTE: Sigma is actually sigma^2
+        sigma_error_losses = {param: 0.5 * tensor.sqr(grad)
+                              for param, grad in previous_steps.items()}
+        update_sigmas = [(self.sigmas[param],
+                         0.5 * (1 / sigma - 1 / self.sigmas[param]) +
+                         sigma_error_losses[param]) for param in params]
+
+        # Update parameters using gradient + regularization
+        steps = OrderedDict(
+            [(param, (param - mu) / sigma ** 2 + previous_steps[param])
+             for param in params])
+
+        return steps, [update_mu, update_sigma] + update_sigmas
 
 
 def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
@@ -128,7 +144,7 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
     )
     main_loop.run()
 
-    #Save the main loop
+    # Save the main loop
     if save_location is not None:
         logger.info('Saving the main loop...')
         dump_manager = MainLoopDumpManager(save_location)
