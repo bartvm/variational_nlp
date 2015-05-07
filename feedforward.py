@@ -65,7 +65,7 @@ def make_variational_model(cost):
     cg = ComputationGraph(cost)
     sigmas = {}
     for param in cg.parameters:
-        sigmas[param] = shared_floatx(numpy.ones_like(param.get_value()),
+        sigmas[param] = shared_floatx(numpy.ones_like(param.get_value()) * 0.1,
                                       name=param.name + '_sigma')
         add_role(sigmas[param], VARIANCE)
 
@@ -135,7 +135,7 @@ def train_model(cost, train_stream, valid_stream,
         algorithm=algorithm,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid_all', every_n_batches=5000),
+                                 prefix='valid_all', every_n_batches=500),
             Printing(every_n_batches=500)
         ]
     )
