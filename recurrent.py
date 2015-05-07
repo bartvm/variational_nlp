@@ -24,8 +24,7 @@ from datastream import (get_vocabulary, get_sentence_stream, frequencies,
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
-
-def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dim,
+def construct_model(vocab_size, embedding_dim, hidden_dim,
                     activation):
 
     # Construct the model
@@ -122,12 +121,12 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         algorithm=algorithm,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid', every_n_batches=5000),
+                                 prefix='valid', every_n_batches=500),
             DataStreamMonitoring([cost, perplexity], valid_rare,
-                                 prefix='valid_rare', every_n_batches=5000),
+                                 prefix='valid_rare', every_n_batches=500),
             DataStreamMonitoring([cost, perplexity], valid_freq,
-                                 prefix='valid_frequent', every_n_batches=5000),
-            Printing(every_n_batches=5000)
+                                 prefix='valid_frequent', every_n_batches=500),
+            Printing(every_n_batches=500)
         ]
     )
     main_loop.run()
@@ -141,9 +140,9 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
 
 if __name__ == "__main__":
     # Test
-    cost = construct_model(50000, 256, 6, 200, Tanh())
+    cost = construct_model(50000, 256, 100, Tanh())
     vocabulary = get_vocabulary(50000)
-    rare, freq = frequencies(vocabulary, 400, 100)
+    rare, freq = frequencies(vocabulary, 2000, 100)
 
     # Build training and validation datasets
     train_stream = Padding(Batch(Mapping(get_sentence_stream('training', [1], vocabulary),

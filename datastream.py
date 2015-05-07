@@ -78,7 +78,7 @@ class FilterWords(object):
 
 
 def _filter_long(data):
-    return len(data[0]) <= 100
+    return len(data[0]) <= 25
 
 
 def _shift_words(sample):
