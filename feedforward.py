@@ -1,4 +1,5 @@
 import logging
+import numpy
 
 from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Rectifier, MLP, Softmax
@@ -11,9 +12,12 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
+from blocks.roles import add_role, VariableRole
+from blocks.utils import shared_floatx
 from fuel.transformers import Batch, Filter
 from fuel.schemes import ConstantScheme
 from theano import tensor
+from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 
 from datastream import (get_vocabulary, get_ngram_stream, frequencies,
@@ -47,6 +51,45 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     hidden.initialize()
 
     return cost
+
+
+class VarianceRole(VariableRole):
+    pass
+
+
+VARIANCE = VarianceRole()
+
+
+def make_variational(cost, cost_grads, learning_rate):
+    # Consider the weights to be the means, create variances
+    cg = ComputationGraph(cost)
+    sigmas = {}
+    for param in cg.parameters:
+        sigmas[param] = shared_floatx(numpy.ones_like(param.get_value()))
+        add_role(sigmas[param], VARIANCE)
+
+    # Replace weights with samples from Gaussian
+    rng = MRG_RandomStreams()
+    new_cg = cg.replace({param: rng.normal(param.shape, param, sigmas[param])
+                         for param in cg.parameters})
+
+    # Create mu and sigma for prior, and their updates
+    mu, sigma = shared_floatx(0), shared_floatx(1)
+    update_mu = \
+        (mu, tensor.mean([param.mean() for param in new_cg.parameters]))
+    update_sigma = \
+        (sigma, tensor.std(tensor.concatenate(
+            [param.flatten() for param in new_cg.parameters])))
+
+    # Update variance based on cost
+    sigma_error_losses = [0.5 * tensor.sqr(cost_grad)
+                          for cost_grad in cost_grads]
+    update_sigmas = [(sigmas[param],
+                      -0.5 * (1 / sigma ** 2 - 1 / sigmas[param] ** 2) -
+                      sigma_error_losses) for param in new_cg.parameters]
+    update_mus= [(param,
+                 -(param - mu) / sigma ** 2 - cost_grads)
+                 for param in new_cg.parameters]
 
 
 def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
