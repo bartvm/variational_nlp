@@ -2,7 +2,7 @@ import logging
 import numpy
 from collections import OrderedDict
 
-from blocks.algorithms import GradientDescent, Scale, StepRule
+from blocks.algorithms import GradientDescent, Scale, StepRule, CompositeRule
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.bricks.lookup import LookupTable
 from blocks.dump import load_parameter_values
@@ -15,14 +15,13 @@ from blocks.main_loop import MainLoop
 from blocks.model import Model
 from blocks.roles import add_role, VariableRole
 from blocks.utils import shared_floatx
-from fuel.transformers import Batch, Filter
+from fuel.transformers import Batch
 from fuel.schemes import ConstantScheme
 from theano import tensor
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 
 
-from datastream import (get_vocabulary, get_ngram_stream, frequencies,
-                        FilterWords)
+from datastream import get_vocabulary, get_ngram_stream, frequencies
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -66,17 +65,18 @@ def make_variational_model(cost):
     cg = ComputationGraph(cost)
     sigmas = {}
     for param in cg.parameters:
-        sigmas[param] = shared_floatx(numpy.ones_like(param.get_value()))
+        sigmas[param] = shared_floatx(numpy.ones_like(param.get_value()),
+                                      name=param.name + '_sigma')
         add_role(sigmas[param], VARIANCE)
 
     # Replace weights with samples from Gaussian
     rng = MRG_RandomStreams()
     new_cg = cg.replace({param: rng.normal(param.shape, param, sigmas[param])
                          for param in cg.parameters})
-    return new_cg, sigmas
+    return new_cg.outputs[0], sigmas
 
 
-class VariationaleInference(StepRule):
+class VariationalInference(StepRule):
     def __init__(self, cost, sigmas):
         self.cost = cost
         self.sigmas = sigmas
@@ -86,8 +86,9 @@ class VariationaleInference(StepRule):
         params = previous_steps.keys()
 
         # Create mu and sigma for prior, and their updates
-        mu, sigma = shared_floatx(0), shared_floatx(1)
-        N = sum([param.get_value().size for param in params])
+        mu, sigma = shared_floatx(0, name='mu'), shared_floatx(1, name='sigma')
+        N = numpy.array(sum([param.get_value().size for param in params]),
+                        dtype='float32')  # Else mean_param is float64
         mean_param = tensor.sum([param.sum() for param in params]) / N
         update_mu = (mu, mean_param)
         update_sigma = (sigma, tensor.sum([tensor.sum(
@@ -109,7 +110,7 @@ class VariationaleInference(StepRule):
         return steps, [update_mu, update_sigma] + update_sigmas
 
 
-def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+def train_model(cost, train_stream, valid_stream,
                 load_location=None, save_location=None):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
@@ -124,7 +125,9 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         model.set_param_values(load_parameter_values(load_location))
 
     cg = ComputationGraph(cost)
-    algorithm = GradientDescent(cost=cost, step_rule=Scale(learning_rate=0.01),
+    step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas),
+                               Scale(learning_rate=0.01)])
+    algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
         model=model,
@@ -133,12 +136,6 @@ def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
         extensions=[
             DataStreamMonitoring([cost, perplexity], valid_stream,
                                  prefix='valid_all', every_n_batches=5000),
-            # Overfitting of rare words occurs between 3000 and 4000 iterations
-            DataStreamMonitoring([cost, perplexity], valid_rare,
-                                 prefix='valid_rare', every_n_batches=500),
-            DataStreamMonitoring([cost, perplexity], valid_freq,
-                                 prefix='valid_frequent',
-                                 every_n_batches=5000),
             Printing(every_n_batches=500)
         ]
     )
@@ -157,23 +154,15 @@ if __name__ == "__main__":
     vocabulary = get_vocabulary(50000)
     rare, frequent = frequencies(vocabulary, 200, 100)
 
+    # Make variational
+    cost, sigmas = make_variational_model(cost)
+
     # Build training and validation datasets
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
                          iteration_scheme=ConstantScheme(64))
     valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
                          iteration_scheme=ConstantScheme(256))
 
-    filt_freq = FilterWords(frequent)
-    filt_rare = FilterWords(rare)
-
-    valid_freq = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary),
-                              filt_freq),
-                       iteration_scheme=ConstantScheme(256))
-    valid_rare = Batch(Filter(get_ngram_stream(6, 'heldout', [1], vocabulary),
-                              filt_rare),
-                       iteration_scheme=ConstantScheme(256))
-
     # Train
-    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
-                load_location=None,
-                save_location="trained_feedforward")
+    train_model(cost, train_stream, valid_stream,
+                load_location=None, save_location="trained_feedforward")
