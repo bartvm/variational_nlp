@@ -75,17 +75,18 @@ def make_variational(cost, cost_grads, learning_rate):
 
     # Create mu and sigma for prior, and their updates
     mu, sigma = shared_floatx(0), shared_floatx(1)
-    update_mu = \
-        (mu, tensor.mean([param.mean() for param in new_cg.parameters]))
-    update_sigma = \
-        (sigma, tensor.std(tensor.concatenate(
-            [param.flatten() for param in new_cg.parameters])))
+    N = tensor.sum([param.size for param in cg.parameters])
+    mean_param = tensor.sum([param.sum() for param in new_cg.parameters]) / N
+    update_mu = (mu, mean_param)
+    update_sigma = (sigma, tensor.sum([tensor.sum(
+        tensor.sqr(param - mean_param)) for param in new_cg.parameters]) / N)
 
     # Update variance based on cost
+    # NOTE: Sigma is actually sigma^2
     sigma_error_losses = [0.5 * tensor.sqr(cost_grad)
                           for cost_grad in cost_grads]
     update_sigmas = [(sigmas[param],
-                      -0.5 * (1 / sigma ** 2 - 1 / sigmas[param] ** 2) -
+                      -0.5 * (1 / sigma - 1 / sigmas[param]) -
                       sigma_error_losses) for param in new_cg.parameters]
     update_mus= [(param,
                  -(param - mu) / sigma ** 2 - cost_grads)
