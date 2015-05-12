@@ -38,7 +38,7 @@ def make_variational_model(cost, init_sigma=0.1):
                          for param in cg.parameters})
     new_cost = new_cg.outputs[0]
     add_role(new_cost, VARIATIONAL_COST)
-    return cost, sigmas
+    return new_cost, sigmas
 
 
 class VariationalInference(StepRule):
