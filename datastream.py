@@ -9,13 +9,14 @@ from fuel import config
 from fuel.datasets import OneBillionWord
 from fuel.transformers import Mapping, Batch, Filter, Transformer
 from fuel.transformers.text import NGrams
+from six import iteritems
 from six.moves import cPickle, zip
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 
-def get_vocabulary(vocab_size):
+def get_vocabulary(vocab_size, id_to_freq=False):
     # Load the word counts
     logger.info('Loading vocabulary')
     with open(os.path.join(config.data_path, '1-billion-word/processed/'
@@ -34,6 +35,11 @@ def get_vocabulary(vocab_size):
     # Limit the vocabulary size
     if vocab_size is not None:
         vocabulary = OrderedDict(islice(vocabulary.items(), vocab_size))
+    id_to_freq_mapping = {}
+    if id_to_freq:
+        for word, index in iteritems(vocabulary):
+            id_to_freq_mapping[index] = word_counts[word]
+        return vocabulary, id_to_freq_mapping
     return vocabulary
 
 
