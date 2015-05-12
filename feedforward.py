@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from blocks.bricks import Rectifier, MLP, Softmax
 from blocks.bricks.lookup import LookupTable
@@ -52,7 +53,10 @@ if __name__ == "__main__":
     vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
 
     # Make variational
-    cost, sigmas = make_variational_model(cost)
+    if len(sys.argv) > 1 and sys.argv[1] == 'variational':
+        cost, sigmas = make_variational_model(cost)
+    else:
+        sigmas = None
 
     # Create monitoring channel
     freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
