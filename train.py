@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def train_model(cost, train_stream, valid_stream, freq_likelihood,
-                sigmas=None, load_location=None, save_location=None,
+                sigmas=None, B=None, load_location=None, save_location=None,
                 learning_rate=0.1):
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
@@ -37,8 +37,7 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
     if VARIATIONAL_COST in cost.tag.roles:
         if sigmas is None:
             raise ValueError('need sigmas to train variational cost')
-        step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas,
-                                                        1.2e5),
+        step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas, B),
                                    Scale(learning_rate=learning_rate)])
     else:
         step_rule = Scale(learning_rate=learning_rate)

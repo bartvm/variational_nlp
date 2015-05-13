@@ -42,33 +42,39 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     lookup.initialize()
     hidden.initialize()
 
-    return x, y, y_hat, cost
+    return y, y_hat, cost
 
 
 if __name__ == "__main__":
     # Test
     vocab_size = 50000
-    x, y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
+    minibatch_size = 512
+    # B is the number of minibatches (formula 18)
+    B = 61440000 / (minibatch_size * 1.)
+    y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
                                         [Rectifier()])
     vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
 
     # Make variational
     if len(sys.argv) > 1 and sys.argv[1] == 'variational':
+        logger.info('Using the variational model')
         cost, sigmas = make_variational_model(cost)
     else:
         sigmas = None
 
     # Create monitoring channel
     freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
-                                          requires=[y, y_hat],
+                                          requires=[
+                                              y, y_hat, tensor.ones_like(y)],
                                           name='freq_costs')
 
     # Build training and validation datasets
     train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
-                         iteration_scheme=ConstantScheme(512))
+                         iteration_scheme=ConstantScheme(minibatch_size))
     valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
-                         iteration_scheme=ConstantScheme(512))
+                         iteration_scheme=ConstantScheme(minibatch_size))
 
     # Train
     train_model(cost, train_stream, valid_stream, freq_likelihood,
-                sigmas=sigmas, save_location="trained_feedforward")
+                sigmas=sigmas, B=B, load_location=None,
+                save_location=None)

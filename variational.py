@@ -17,6 +17,7 @@ class VariationalCostRole(CostRole):
     pass
 
 
+
 VARIANCE = VarianceRole()
 VARIATIONAL_COST = VariationalCostRole()
 

@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Linear, Softmax, Tanh
@@ -12,36 +13,32 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import IsotropicGaussian, Constant
 from blocks.main_loop import MainLoop
 from blocks.model import Model
+from blocks.roles import add_role, OutputRole
 from fuel.transformers import Batch, Padding, Mapping
 from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import (get_vocabulary, get_sentence_stream, frequencies,
-                        add_frequency_mask, add_frequency_all)
-
+from datastream import (get_vocabulary, get_sentence_stream)
+from monitoring import FrequencyLikelihood
+from variational import make_variational_model
+from train import train_model
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
-def construct_model(vocab_size, embedding_dim, hidden_dim,
-                    activation):
+
+def construct_model_r(vocab_size, embedding_dim, hidden_dim,
+                      activation):
 
     # Construct the model
+    #  All have shape (Batch, Time)
     x = tensor.lmatrix('features')
     x_mask = tensor.fmatrix('features_mask')
     y = tensor.lmatrix('targets')
-    # Batch X Time
     y_mask = tensor.fmatrix('targets_mask')
-    # Batch X Time
-    frequency_mask = tensor.fmatrix('frequency_mask')
-    frequency_mask_mask = tensor.fmatrix('frequency_mask_mask')
-
-    # Only for the validation
-    last_word = tensor.lvector('last_word')
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
-
     linear = Linear(input_dim=embedding_dim, output_dim=hidden_dim,
                     name="linear")
     hidden = SimpleRecurrent(dim=hidden_dim, activation=activation,
@@ -53,40 +50,38 @@ def construct_model(vocab_size, embedding_dim, hidden_dim,
     embeddings = lookup.apply(x)
     # Give time as the first index: Time X Batch X embedding_dim
     embeddings = embeddings.dimshuffle(1, 0, 2)
-
     pre_recurrent = linear.apply(embeddings)
-
     after_recurrent = hidden.apply(inputs=pre_recurrent,
                                    mask=x_mask.T)[:-1]
     after_recurrent_last = after_recurrent[-1]
-
     presoft = top_linear.apply(after_recurrent)
 
     # Define the cost
-    # Give y as a vector and reshape presoft to 2D tensor
-    y = y.flatten()
-
-    shape = presoft.shape
+    # Compute the probability distribution
+    time, batch, feat = presoft.shape
     presoft = presoft.dimshuffle(1, 0, 2)
-    presoft = presoft.reshape((shape[0] * shape[1], shape[2]))
+    presoft = presoft.reshape((batch * time, feat))
+
+    y_hat = Softmax().apply(presoft)
+    y = y.flatten()
+    y_mask = y_mask.flatten()
 
     # Build cost_matrix
-    presoft = presoft - presoft.max(axis=1).dimshuffle(0, 'x')
-    log_prob = presoft - \
-        tensor.log(tensor.exp(presoft).sum(axis=1).dimshuffle(0, 'x'))
+    distribution = y_hat - y_hat.max(axis=1).dimshuffle(0, 'x')
+    log_prob = distribution - \
+        tensor.log(tensor.exp(distribution).sum(axis=1).dimshuffle(0, 'x'))
     flat_log_prob = log_prob.flatten()
     range_ = tensor.arange(y.shape[0])
-    flat_indices = y + range_ * presoft.shape[1]
-    cost_matrix = flat_log_prob[flat_indices]
+    flat_indices = y + range_ * distribution.shape[1]
+    cost_matrix = - flat_log_prob[flat_indices]
 
-    # Mask useless values from the cost_matrix
-    cost_matrix = - cost_matrix * \
-        y_mask.flatten() * frequency_mask.flatten() * \
-        frequency_mask_mask.flatten()
+    # Hide useless value in the cost_matrix
+    cost_matrix = cost_matrix * y_mask
 
     # Average the cost
     cost = cost_matrix.sum()
-    cost = cost / (y_mask * frequency_mask).sum()
+    cost = cost / (y_mask.sum())
+    add_role(cost, OutputRole())
 
     # Initialize parameters
     for brick in (lookup, linear, hidden, top_linear):
@@ -94,74 +89,42 @@ def construct_model(vocab_size, embedding_dim, hidden_dim,
         brick.biases_init = Constant(0.)
         brick.initialize()
 
-    return cost
+    return y, y_hat, cost, y_mask
 
-
-def train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
-                load_location=None,
-                save_location=None):
-    cost.name = 'nll'
-    perplexity = 2 ** (cost / tensor.log(2))
-    perplexity.name = 'ppl'
-
-    # Define the model
-    model = Model(cost)
-
-    # Load the parameters from a dumped model
-    if load_location is not None:
-        logger.info('Loading parameters...')
-        model.set_param_values(load_parameter_values(load_location))
-
-    cg = ComputationGraph(cost)
-    algorithm = GradientDescent(cost=cost, step_rule=Scale(learning_rate=0.01),
-                                params=cg.parameters)
-    main_loop = MainLoop(
-        model=model,
-        data_stream=train_stream,
-        algorithm=algorithm,
-        extensions=[
-            DataStreamMonitoring([cost, perplexity], valid_stream,
-                                 prefix='valid', every_n_batches=500),
-            DataStreamMonitoring([cost, perplexity], valid_rare,
-                                 prefix='valid_rare', every_n_batches=500),
-            DataStreamMonitoring([cost, perplexity], valid_freq,
-                                 prefix='valid_frequent', every_n_batches=500),
-            Printing(every_n_batches=500)
-        ]
-    )
-    main_loop.run()
-
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')
 
 if __name__ == "__main__":
     # Test
-    cost = construct_model(50000, 256, 100, Tanh())
-    vocabulary = get_vocabulary(50000)
-    rare, freq = frequencies(vocabulary, 2000, 100)
 
+    vocab_size = 50000
+    max_sentence_length = 35
+    minibatch_size = 64
+    # B is the number of minibatches (formula 18)
+    B = 237760 / (minibatch_size * 1.)
+
+    y, y_hat, cost, y_mask = construct_model_r(50000, 256, 100, Tanh())
+    vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
+
+    # Make variational
+    if len(sys.argv) > 1 and sys.argv[1] == 'variational':
+        logger.info('Using the variational model')
+        cost, sigmas = make_variational_model(cost)
+    else:
+        sigmas = None
+
+    # Create monitoring channel
+    freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
+                                          requires=[y, y_hat, y_mask],
+                                          name='freq_costs')
     # Build training and validation datasets
-    train_stream = Padding(Batch(Mapping(get_sentence_stream('training', [1], vocabulary),
-                                         add_frequency_all, add_sources=("frequency_mask",)),
-                                 iteration_scheme=ConstantScheme(64)))
+    train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary, max_sentence_length),
+                                 iteration_scheme=ConstantScheme(minibatch_size)))
 
-    valid_stream = Padding(Batch(Mapping(get_sentence_stream('heldout', [1], vocabulary),
-                                         add_frequency_all, add_sources=("frequency_mask",)),
-                                 iteration_scheme=ConstantScheme(256)))
-
-    valid_freq = Padding(Batch(Mapping(get_sentence_stream('heldout', [1], vocabulary),
-                                       add_frequency_mask(freq), add_sources=("frequency_mask",)),
-                               iteration_scheme=ConstantScheme(256)))
-
-    valid_rare = Padding(Batch(Mapping(get_sentence_stream('heldout', [1], vocabulary),
-                                       add_frequency_mask(rare), add_sources=("frequency_mask",)),
-                               iteration_scheme=ConstantScheme(256)))
+    valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary, max_sentence_length),
+                                 iteration_scheme=ConstantScheme(minibatch_size)))
 
     # Train
-    train_model(cost, train_stream, valid_stream, valid_freq, valid_rare,
+    train_model(cost, train_stream, valid_stream, freq_likelihood,
+                sigmas=sigmas, B=B,
                 load_location=None,
-                save_location=None)
+                save_location=None,
+                learning_rate=0.01)

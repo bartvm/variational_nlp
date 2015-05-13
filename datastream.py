@@ -65,10 +65,11 @@ def get_ngram_stream(ngram_order, which_set, which_partitions,
 
 
 class _FilterLong(object):
+
     def __init__(self, max_length):
         self.max_length = max_length
 
-    def __cal__(self, data):
+    def __call__(self, data):
         return len(data[0]) <= self.max_length
 
 
@@ -79,7 +80,7 @@ def _shift_words(sample):
 
 
 def get_sentence_stream(which_set, which_partitions, vocabulary,
-                        max_length=50):
+                        max_length=35):
     """Return an iterator over sentences
 
     Notes
