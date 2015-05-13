@@ -37,7 +37,8 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
     if VARIATIONAL_COST in cost.tag.roles:
         if sigmas is None:
             raise ValueError('need sigmas to train variational cost')
-        step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas, B),
+        step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas,
+                                                        B, learning_rate),
                                    Scale(learning_rate=learning_rate)])
     else:
         step_rule = Scale(learning_rate=learning_rate)
