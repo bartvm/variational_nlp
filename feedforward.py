@@ -77,4 +77,4 @@ if __name__ == "__main__":
     # Train
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, B=B, load_location=None,
-                save_location=None)
+                save_location="trained_feedforward")

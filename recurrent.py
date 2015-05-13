@@ -67,7 +67,7 @@ def construct_model_r(vocab_size, embedding_dim, hidden_dim,
     y_mask = y_mask.flatten()
 
     # Build cost_matrix
-    distribution = y_hat - y_hat.max(axis=1).dimshuffle(0, 'x')
+    distribution = presoft - presoft.max(axis=1).dimshuffle(0, 'x')
     log_prob = distribution - \
         tensor.log(tensor.exp(distribution).sum(axis=1).dimshuffle(0, 'x'))
     flat_log_prob = log_prob.flatten()
