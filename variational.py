@@ -17,7 +17,6 @@ class VariationalCostRole(CostRole):
     pass
 
 
-
 VARIANCE = VarianceRole()
 VARIATIONAL_COST = VariationalCostRole()
 
@@ -43,10 +42,11 @@ def make_variational_model(cost, init_sigma=0.1):
 
 
 class VariationalInference(StepRule):
-    def __init__(self, cost, sigmas, num_batches):
+    def __init__(self, cost, sigmas, num_batches, learning_rate):
         self.cost = cost
         self.sigmas = sigmas
         self.num_batches = num_batches
+        self.learning_rate = learning_rate
 
     def compute_steps(self, previous_steps):
         # previous_steps contains parameters and their gradients
@@ -75,10 +75,15 @@ class VariationalInference(StepRule):
         # NOTE: Sigma is actually sigma^2
         sigma_error_losses = {param: 0.5 * tensor.sqr(grad)
                               for param, grad in previous_steps.items()}
-        steps.update(OrderedDict([(
-            self.sigmas[param],
-            0.5 * (1 / sigma - 1 / self.sigmas[param]) /
-            self.num_batches +
-            sigma_error_losses[param]) for param in params]))
+        sigma_steps = {param: 0.5 * (1 / sigma - 1 / self.sigmas[param]) /
+                       self.num_batches + sigma_error_losses[param]
+                       for param in params}
+        sigma_steps = {param: tensor.switch(self.sigmas[param] -
+                                            self.learning_rate *
+                                            sigma_steps[param] < 0,
+                                            0, sigma_steps[param])
+                       for param in params}
+        steps.update(OrderedDict([(self.sigmas[param], sigma_steps[param])
+                                  for param in params]))
 
         return steps, [update_mu, update_sigma]
