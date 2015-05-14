@@ -47,7 +47,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
 
 if __name__ == "__main__":
     # Test
-    vocab_size = 10000
+    vocab_size = 3000
     minibatch_size = 512
     # B is the number of minibatches (formula 18)
     B = 61440000 / (minibatch_size * 1.)
