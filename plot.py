@@ -5,9 +5,14 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-def diagonal(Z, freq, vocab_size):
-    plt.plot(np.log(freq), Z[-1], np.log(freq),
-             np.ones((freq.shape[0])) * -np.log(1. / vocab_size))
+def diagonal(Z, freq, vocab_size, smooth=0):
+    if smooth:
+        smoothed = np.convolve(Z[-1], np.ones(smooth) / smooth)[smooth:-smooth]
+        plt.plot(np.log(freq)[smooth // 2:len(smoothed) + smooth // 2],
+                 smoothed)
+    else:
+        plt.plot(np.log(freq), Z[-1])
+    plt.plot(np.log(freq), np.ones((freq.shape[0])) * -np.log(1. / vocab_size))
     plt.ylim([0, 18])
     plt.show()
 
