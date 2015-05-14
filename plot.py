@@ -6,7 +6,7 @@ import matplotlib.animation as animation
 
 
 # Load the log
-with open("C://Users/Eloi/Desktop/trained_feedforward/log", 'rb') as f:
+with open("C://Users/Eloi/Desktop/log_recurrent", 'rb') as f:
     log = cPickle.load(f)
 
 # Get the validation costs from the log
@@ -35,27 +35,31 @@ def diagonal():
 
 
 def dynamic(speed):
-    # First set up the figure, the axis, and the plot element we want to animate
+    # First set up the figure, the axis, and the plot element we want to
+    # animate
     fig = plt.figure()
     ax = plt.axes(ylim=(0, 18), xlim=(0, 15))
     line, = ax.plot([], [], lw=2)
+    line2, = ax.plot([], [], lw=2)
 
     # initialization function: plot the background of each frame
     def init():
         line.set_data([], [])
-        return line,
+        line2.set_data([], [])
+        return line, line2,
 
     # animation function.  This is called sequentially
     def animate(i):
         x = np.log(freq)
-        y = Z[i*speed]
+        y = Z[i]
         line.set_data(x, y)
-        return line,
+        line2.set_data(x, np.ones_like(Z[i]) * 10.82)
+        return line, line2
 
-    # call the animator.  blit=True means only re-draw the parts that have changed.
+    # call the animator.  blit=True means only re-draw the parts that have
+    # changed.
     anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                   frames=Z.shape[0] / speed, interval=300, blit=True)
-
+                                   frames=Z.shape[0], interval=speed, blit=True)
     plt.show()
 
 
@@ -70,5 +74,5 @@ def rainbow(smooth):
 
 if __name__ == "__main__":
     # diagonal()
-    dynamic(1)
+    dynamic(100)
     # rainbow(25)

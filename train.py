@@ -51,8 +51,8 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
         extensions=[
             DataStreamMonitoring([freq_likelihood, cost, perplexity],
                                  valid_stream,
-                                 prefix='valid', every_n_batches=500),
-            Printing(every_n_batches=500)
+                                 prefix='valid', every_n_batches=1000),
+            Printing(every_n_batches=1000)
         ]
     )
     main_loop.run()

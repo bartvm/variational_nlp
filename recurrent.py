@@ -62,6 +62,9 @@ def construct_model_r(vocab_size, embedding_dim, hidden_dim,
     presoft = presoft.dimshuffle(1, 0, 2)
     presoft = presoft.reshape((batch * time, feat))
 
+    # Don't look at the prediction that had not enough words
+    y_mask = tensor.set_subtensor(y_mask[:,:5],tensor.zeros_like(y_mask[:,:5]))
+
     y_hat = Softmax().apply(presoft)
     y = y.flatten()
     y_mask = y_mask.flatten()
@@ -126,5 +129,5 @@ if __name__ == "__main__":
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, B=B,
                 load_location=None,
-                save_location="trained_recurrent",
+                save_location="trained_recurrent_no_beginning_large_plot",
                 learning_rate=0.01)
