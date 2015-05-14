@@ -1,40 +1,18 @@
+import sys
 import numpy as np
 from six.moves import cPickle
-import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-# Load the log
-with open("C://Users/Eloi/Desktop/log_recurrent", 'rb') as f:
-    log = cPickle.load(f)
-
-# Get the validation costs from the log
-valid_costs = [val['valid_freq_costs']
-               for key, val in log.items() if 'valid_freq_costs' in val]
-
-# Extract the necessary axis
-np.save('costs.npy', np.asarray(valid_costs)[:, :, 2])
-Z = np.load('costs.npy')
-
-freq = np.asarray(valid_costs)[0, :, 0]
-
-# Diagonal plot
-
-
-def diagonal():
+def diagonal(Z, freq, vocab_size):
     plt.plot(np.log(freq), Z[-1], np.log(freq),
-             np.ones((freq.shape[0])) * 10.82)
+             np.ones((freq.shape[0])) * -np.log(1. / vocab_size))
     plt.ylim([0, 18])
     plt.show()
-# Rainbow plot
-# The convolve part smooths the lines by taking a running average over 25 steps
-# The rest is just for the colors
-# The 1593 refers to the number of different word frequencies that are in
-# the validation set
 
 
-def dynamic(speed):
+def dynamic(Z, freq, vocab_size, speed):
     # First set up the figure, the axis, and the plot element we want to
     # animate
     fig = plt.figure()
@@ -53,26 +31,51 @@ def dynamic(speed):
         x = np.log(freq)
         y = Z[i]
         line.set_data(x, y)
-        line2.set_data(x, np.ones_like(Z[i]) * 10.82)
+        line2.set_data(x, np.ones_like(Z[i]) * -np.log(1. / vocab_size))
         return line, line2
 
     # call the animator.  blit=True means only re-draw the parts that have
     # changed.
     anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                   frames=Z.shape[0], interval=speed, blit=True)
+                                   frames=Z.shape[0], interval=speed,
+                                   blit=True)
     plt.show()
 
 
-def rainbow(smooth):
-    for line, color in zip(Z.T, plt.cm.ScalarMappable(plt.Normalize(0, 1593), plt.get_cmap('Spectral')).to_rgba(np.arange(1593))):
-        plt.plot(np.convolve(line, np.ones(smooth) / (smooth * 1.))
-                 [smooth:-smooth], c=color)
-        #plt.plot(line, c=color)
+def rainbow(Z, freq, smooth):
+    """Rainbow plot
+
+    The convolve part smooths the lines by taking a running average over 25
+    steps The rest is just for the colors The 1593 refers to the number of
+    different word frequencies that are in the validation set.
+
+    """
+    for line, color in \
+            zip(Z.T, plt.cm.ScalarMappable(plt.Normalize(0, len(Z.T)),
+                                           plt.get_cmap('Spectral')).to_rgba(
+            np.arange(len(Z.T)))):
+        if smooth:
+            plt.plot(np.convolve(line, np.ones(smooth) / (smooth * 1.))
+                     [smooth:-smooth], c=color)
+        else:
+            plt.plot(line, c=color)
     plt.ylim([0, 25])
     plt.show()
 
 
 if __name__ == "__main__":
-    # diagonal()
-    dynamic(100)
-    # rainbow(25)
+    # Usage: plot.py log vocab_size
+    # Example: plot.py trained_feedforward/log 50000
+    with open(sys.argv[1], 'rb') as f:
+        log = cPickle.load(f)
+    # Get the validation costs from the log
+    valid_costs = [val['valid_freq_costs']
+                   for key, val in log.items() if 'valid_freq_costs' in val]
+
+    # Extract the necessary axis
+    Z = np.asarray(valid_costs)[:, :, 2]
+    freq = np.asarray(valid_costs)[0, :, 0]
+
+    diagonal(Z, freq, int(sys.argv[2]))
+    dynamic(Z, freq, int(sys.argv[2]), 100)
+    rainbow(Z, freq, 0)
