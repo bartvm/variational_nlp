@@ -10,7 +10,7 @@ from fuel.transformers.text import NGrams
 from six import iteritems
 from six.moves import cPickle, zip
 
-logging.basicConfig(level='INFO')
+logging.basicConfig(level='DEBUG')
 logger = logging.getLogger(__name__)
 
 

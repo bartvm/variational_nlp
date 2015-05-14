@@ -9,7 +9,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from datastream import get_vocabulary, get_ngram_stream
+from penntree import get_vocabulary, get_ngram_stream
 from monitoring import FrequencyLikelihood
 from variational import make_variational_model
 from train import train_model
@@ -47,12 +47,12 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
 
 if __name__ == "__main__":
     # Test
-    vocab_size = 50000
+    vocab_size = 10000
     minibatch_size = 512
     # B is the number of minibatches (formula 18)
     B = 61440000 / (minibatch_size * 1.)
     y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
-                                        [Rectifier()])
+                                     [Rectifier()])
     vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
 
     # Make variational
@@ -69,9 +69,9 @@ if __name__ == "__main__":
                                           name='freq_costs')
 
     # Build training and validation datasets
-    train_stream = Batch(get_ngram_stream(6, 'training', [1], vocabulary),
+    train_stream = Batch(get_ngram_stream(6, 'train', [1], vocabulary),
                          iteration_scheme=ConstantScheme(minibatch_size))
-    valid_stream = Batch(get_ngram_stream(6, 'heldout', [1], vocabulary),
+    valid_stream = Batch(get_ngram_stream(6, 'valid', [1], vocabulary),
                          iteration_scheme=ConstantScheme(minibatch_size))
 
     # Train
