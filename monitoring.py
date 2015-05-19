@@ -5,6 +5,7 @@ from blocks.monitoring.aggregation import MonitoredQuantity
 
 
 class FrequencyLikelihood(MonitoredQuantity):
+
     def __init__(self, word_counts, **kwargs):
         """Calculate the likelihood as a function of word frequency.
 
@@ -27,7 +28,8 @@ class FrequencyLikelihood(MonitoredQuantity):
             if mask:
                 freq = self.word_counts[target]
                 if freq:  # Skip <S>, </S> and <UNK>
-                    self.summed_likelihood[freq] += -numpy.log(prediction[target])
+                    self.summed_likelihood[freq] += - \
+                        numpy.log(prediction[target])
                     self.total_seen[freq] += 1
 
     def readout(self):
