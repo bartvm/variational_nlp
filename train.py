@@ -19,14 +19,17 @@ logger = logging.getLogger(__name__)
 
 
 class LearningRateHalver(SharedVariableModifier):
+
     def __init__(self, record_name, lr, **kwargs):
         self.record_name = record_name
         self.lr = lr
-        super(LearningRateHalver, self).__init__(self.lr, lambda t, x: x/2, **kwargs)
+        super(LearningRateHalver, self).__init__(
+            self.lr, lambda t, x: x/2, **kwargs)
 
     def do(self, which_callback, *args):
         if self.main_loop.log.current_row[self.record_name] > 0.99 * self.main_loop.log[self.main_loop.log.status["iterations_done"] - 1000][self.record_name]:
             super(LearningRateHalver, self).do(which_callback, *args)
+
 
 def train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=None, B=None, load_location=None, save_location=None,
@@ -57,8 +60,10 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
         lr = step_rule.learning_rate
 
     lr.name = "learning_rate"
-    monitor_lr = TrainingDataMonitoring([lr], after_batch=False, every_n_batches=1000, before_training=True)
-    lr_halver = LearningRateHalver("valid_nll", lr, after_epoch=False, after_batch=False, every_n_batches=1000, before_training=False)
+    monitor_lr = TrainingDataMonitoring(
+        [lr], after_batch=False, every_n_batches=1000, before_training=True)
+    lr_halver = LearningRateHalver(
+        "valid_nll", lr, after_epoch=False, after_batch=False, every_n_batches=1000, before_training=False)
     algorithm = GradientDescent(cost=cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(

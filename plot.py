@@ -6,6 +6,7 @@ import matplotlib.animation as animation
 
 
 def diagonal(Z, freq, vocab_size, smooth=0, Z2=None):
+
     if smooth:
         smoothed = np.convolve(Z[-1], np.ones(smooth) / smooth)[smooth:-smooth]
         plt.plot(np.log(freq)[smooth // 2:len(smoothed) + smooth // 2], smoothed)
@@ -103,6 +104,7 @@ if __name__ == "__main__":
         with open(sys.argv[3], 'rb') as f:
             log2 = cPickle.load(f)
         valid_costs2 = [val['valid_freq_costs'] for key, val in log2.items() if 'valid_freq_costs' in val]
+
         Z2 = np.asarray(valid_costs2)[:, :, 2]
         diagonal(Z, freq, int(sys.argv[2]), smooth_diag, Z2)
     else:
