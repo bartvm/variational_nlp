@@ -47,14 +47,18 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
 
 if __name__ == "__main__":
     # Test
-    vocab_size = 5000
+    vocab_size = 9950
     minibatch_size = 512
     # B is the number of minibatches (formula 18)
     #  one billion word
     # B = 61440000 / (minibatch_size * 1.)
 
     # penn tree
-    B = 920000 / (minibatch_size * 1.)
+    #B = 920000 / (minibatch_size * 1.)
+
+    # penn tree
+    #B = 460000 / (minibatch_size * 1.)
+    B = 100000 / (minibatch_size * 1.)
 
     y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
                                      [Rectifier()])
@@ -79,8 +83,8 @@ if __name__ == "__main__":
     valid_stream = Batch(get_ngram_stream(6, 'valid', [1], vocabulary),
                          iteration_scheme=ConstantScheme(minibatch_size))
 
-    #train
+    # Train
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, B=B, 
-                load_location="trained_feedforward_penn_var2/params.npz",
-                save_location="trained_feedforward_penn_5000_var")
+                load_location=None,
+                save_location=None)

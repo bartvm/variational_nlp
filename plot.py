@@ -23,6 +23,7 @@ def diagonal(Z, freq, vocab_size, smooth=0, Z2=None):
     plt.plot(np.log(freq), np.ones((freq.shape[0])) * -np.log(1. / vocab_size))
 
     plt.ylim([0, 18])
+    plt.xlim([0, 12])
     plt.show()
 
 
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     Z = np.asarray(valid_costs)[:, :, 2]
     freq = np.asarray(valid_costs)[0, :, 0]
 
-    smooth_diag=5
+    smooth_diag=0
     if len(sys.argv) > 3:   
         with open(sys.argv[3], 'rb') as f:
             log2 = cPickle.load(f)
