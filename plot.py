@@ -5,13 +5,21 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
-def diagonal(Z, freq, vocab_size, smooth=0):
+def diagonal(Z, freq, vocab_size, smooth=0, Z2=None):
     if smooth:
         smoothed = np.convolve(Z[-1], np.ones(smooth) / smooth)[smooth:-smooth]
-        plt.plot(np.log(freq)[smooth // 2:len(smoothed) + smooth // 2],
-                 smoothed)
+        plt.plot(np.log(freq)[smooth // 2:len(smoothed) + smooth // 2], smoothed)
     else:
         plt.plot(np.log(freq), Z[-1])
+
+    if Z2 is not None:
+        if smooth:
+            smoothed2 = np.convolve(Z2[-1], np.ones(smooth) / smooth)[smooth:-smooth]
+            plt.plot(np.log(freq)[smooth // 2:len(smoothed) + smooth //2], smoothed2)
+
+        else:
+            plt.plot(np.log(freq), Z2[-1])
+
     plt.plot(np.log(freq), np.ones((freq.shape[0])) * -np.log(1. / vocab_size))
 
     plt.ylim([0, 18])
@@ -77,19 +85,28 @@ def rainbow(Z, freq, smooth):
 
 
 if __name__ == "__main__":
-    # Usage: plot.py log vocab_size
-    # Example: plot.py trained_feedforward/log 50000
+    # Usage: plot.py log vocab_size [log_reference]
+    # Example: plot.py trained_feedforward_var/log 50000 trained_feedforward/log
     with open(sys.argv[1], 'rb') as f:
         log = cPickle.load(f)
+
     # Get the validation costs from the log
     valid_costs = [val['valid_freq_costs']
                    for key, val in log.items() if 'valid_freq_costs' in val]
-
     # Extract the necessary axis
     Z = np.asarray(valid_costs)[:, :, 2]
     freq = np.asarray(valid_costs)[0, :, 0]
 
-    diagonal(Z, freq, int(sys.argv[2]))
+    smooth_diag=5
+    if len(sys.argv) > 3:   
+        with open(sys.argv[3], 'rb') as f:
+            log2 = cPickle.load(f)
+        valid_costs2 = [val['valid_freq_costs'] for key, val in log2.items() if 'valid_freq_costs' in val]
+        Z2 = np.asarray(valid_costs2)[:, :, 2]
+        diagonal(Z, freq, int(sys.argv[2]), smooth_diag, Z2)
+    else:
+        diagonal(Z, freq, int(sys.argv[2]), smooth_diag)
+
     dynamic(Z, freq, int(sys.argv[2]), 100)
     rainbow(Z, freq, 0)
 
