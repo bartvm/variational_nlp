@@ -110,4 +110,3 @@ if __name__ == "__main__":
 
     dynamic(Z, freq, int(sys.argv[2]), 100)
     rainbow(Z, freq, 0)
-
