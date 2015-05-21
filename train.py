@@ -7,6 +7,7 @@ from blocks.extensions import Printing
 from blocks.extensions.monitoring import (DataStreamMonitoring,
                                           TrainingDataMonitoring)
 from blocks.extensions.training import SharedVariableModifier
+from blocks.extensions.saveload import Dump
 from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
@@ -88,14 +89,8 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
                                  valid_stream, prefix='valid'),
             monitor_lr,
             lr_halver,
-            Printing()
+            Printing(),
+            Dump(save_location, after_epoch=True)
         ]
     )
     main_loop.run()
-
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')

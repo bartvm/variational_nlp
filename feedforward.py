@@ -78,6 +78,8 @@ if __name__ == "__main__":
                          iteration_scheme=ConstantScheme(minibatch_size))
 
     # Train
+    sys.stdout = sys.stderr
+    print('Hello world?')
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, num_batches=num_batches,
                 load_location=None,

@@ -1,7 +1,6 @@
 #!/bin/bash
-#PBS -N PennTreebankFeedforward
 #PBS -A jvb-000-aa
-#PBS -l walltime=12:00:00
+#PBS -l walltime=6:00:00
 #PBS -l nodes=1:gpus=2
 cd "${PBS_O_WORKDIR}"
 
