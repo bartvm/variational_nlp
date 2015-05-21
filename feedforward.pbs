@@ -5,7 +5,10 @@
 #PBS -l nodes=1:gpus=2
 cd "{PBS_O_WORKDIR}"
 
-THEANO_FLAGS=device=gpu,floatX=float32 TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE python feedforward.py >> feedforward_$VOCAB_SIZE_$TRAIN_SIZE.log 2>&1 &
+echo "Starting TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE"
+THEANO_FLAGS=device=gpu,floatX=float32 TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE python feedforward.py >> feedforward_$VOCAB_SIZE-$TRAIN_SIZE.log 2>&1 &
 let TRAIN_SIZE+=100000
 let VOCAB_SIZE+=1000
-THEANO_FLAGS=device=gpu,floatX=float32 TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE python feedforward.py >> feedforward_$VOCAB_SIZE_$TRAIN_SIZE.log 2>&1
+echo "Starting TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE"
+THEANO_FLAGS=device=gpu,floatX=float32 TRAIN_SIZE=$TRAIN_SIZE VOCAB_SIZE=$VOCAB_SIZE python feedforward.py >> feedforward_$VOCAB_SIZE-$TRAIN_SIZE.log 2>&1 &
+wait
