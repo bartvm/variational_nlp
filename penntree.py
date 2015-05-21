@@ -1,5 +1,4 @@
 import os
-from collections import OrderedDict
 from itertools import count
 
 import numpy
@@ -9,36 +8,25 @@ from fuel.schemes import SequentialExampleScheme
 from fuel.streams import DataStream
 from fuel.transformers.text import NGrams
 
+path = os.path.join(config.data_path, 'PennTreebankCorpus')
 
-def get_vocabulary(vocab_size, id_to_freq=False):
-    assert vocab_size <= 10000
-    path = os.path.join(config.data_path, 'PennTreebankCorpus')
-    orig_tokens = numpy.load(os.path.join(path,
-                                          'dictionaries.npz'))['unique_words']
 
-    # Sort tokens by frequency
+def get_data(data_size, vocab_size):
+    """Get a training set with the given number of tokens."""
     train = numpy.load(os.path.join(
         path, 'penntree_char_and_word.npz'))['train_words']
-    tokens = orig_tokens[numpy.argsort(numpy.bincount(train))[::-1]]
-    vocabulary = OrderedDict(zip(tokens, range(vocab_size)))
-    if id_to_freq:
-        id_to_freq_mapping = {}
-        train = numpy.load(os.path.join(
-            path, 'penntree_char_and_word.npz'))['train_words']
-        token_count = numpy.bincount([vocabulary[orig_tokens[token]]
-                                      for token in train
-                                      if orig_tokens[token] in vocabulary])
-        id_to_freq_mapping = dict(zip(count(), token_count))
-        return vocabulary, id_to_freq_mapping
-    return vocabulary
+    valid = numpy.load(os.path.join(
+        path, 'penntree_char_and_word.npz'))['valid_words']
+    train = train[:data_size]
+    assert numpy.unique(train).size >= vocab_size
+    ordered_tokens = numpy.argsort(numpy.bincount(train))[::-1]
+    index_mapping = {old: new for old, new in zip(ordered_tokens, count())}
+    train = [index_mapping.get(old, 591) for old in train]
+    valid = [index_mapping.get(old, 591) for old in valid]
+    return train, valid, {i: j for i, j in zip(count(), numpy.bincount(train))}
 
 
-def get_ngram_stream(ngram_order, which_set, which_partitions, vocabulary):
-    path = os.path.join(config.data_path, 'PennTreebankCorpus')
-    train = numpy.load(os.path.join(
-        path, 'penntree_char_and_word.npz'))['{}_words'.format(which_set)]
-    tokens = numpy.load(os.path.join(path, 'dictionaries.npz'))['unique_words']
-    train = [vocabulary.get(tokens[token], 591) for token in train]
+def get_ngram_stream(ngram_order, train):
     dataset = IndexableDataset({'features': [train]})
     stream = DataStream(dataset, iteration_scheme=SequentialExampleScheme(1))
     n_gram_stream = NGrams(ngram_order, stream)

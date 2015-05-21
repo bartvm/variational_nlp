@@ -1,4 +1,7 @@
+from __future__ import division
+
 import logging
+import os
 import sys
 
 from blocks.bricks import Rectifier, MLP, Softmax
@@ -9,7 +12,7 @@ from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
-from penntree import get_vocabulary, get_ngram_stream
+from penntree import get_data, get_ngram_stream
 from monitoring import FrequencyLikelihood
 from variational import make_variational_model
 from train import train_model
@@ -47,22 +50,14 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
 
 if __name__ == "__main__":
     # Test
-    vocab_size = 9950
+    vocab_size = int(os.environ.get('VOCAB_SIZE', 10000))
+    train_size = int(os.environ.get('TRAIN_SIZE', 929589))
     minibatch_size = 512
-    # B is the number of minibatches (formula 18)
-    #  one billion word
-    # B = 61440000 / (minibatch_size * 1.)
-
-    # penn tree
-    #B = 920000 / (minibatch_size * 1.)
-
-    # penn tree
-    #B = 460000 / (minibatch_size * 1.)
-    B = 100000 / (minibatch_size * 1.)
+    num_batches = 100000 / minibatch_size
 
     y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
                                      [Rectifier()])
-    vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
+    train, valid, id_to_freq_mapping = get_data(train_size, vocab_size)
 
     # Make variational
     if len(sys.argv) > 1 and sys.argv[1] == 'variational':
@@ -73,18 +68,18 @@ if __name__ == "__main__":
 
     # Create monitoring channel
     freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
-                                          requires=[
-                                              y, y_hat, tensor.ones_like(y)],
+                                          requires=[y, y_hat],
                                           name='freq_costs')
 
     # Build training and validation datasets
-    train_stream = Batch(get_ngram_stream(6, 'train', [1], vocabulary),
+    train_stream = Batch(get_ngram_stream(6, train),
                          iteration_scheme=ConstantScheme(minibatch_size))
-    valid_stream = Batch(get_ngram_stream(6, 'valid', [1], vocabulary),
+    valid_stream = Batch(get_ngram_stream(6, valid),
                          iteration_scheme=ConstantScheme(minibatch_size))
 
     # Train
     train_model(cost, train_stream, valid_stream, freq_likelihood,
-                sigmas=sigmas, B=B,
+                sigmas=sigmas, num_batches=num_batches,
                 load_location=None,
-                save_location=None)
+                save_location='feedforward_{}_{}'.format(vocab_size,
+                                                         train_size))

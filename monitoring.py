@@ -23,9 +23,10 @@ class FrequencyLikelihood(MonitoredQuantity):
         self.summed_likelihood = defaultdict(int)
         self.total_seen = defaultdict(int)
 
-    def accumulate(self, targets, predictions, masks):
-        for i, (target, prediction, mask) in enumerate(zip(targets, predictions, masks)):
-            if mask:
+    def accumulate(self, targets, predictions, masks=None):
+        for i, (target, prediction) in \
+                enumerate(zip(targets, predictions)):
+            if masks is None or masks[i]:
                 freq = self.word_counts[target]
                 if freq:  # Skip <S>, </S> and <UNK>
                     self.summed_likelihood[freq] += - \
