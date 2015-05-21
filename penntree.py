@@ -20,7 +20,8 @@ def get_data(data_size, vocab_size):
     train = train[:data_size]
     assert numpy.unique(train).size >= vocab_size
     ordered_tokens = numpy.argsort(numpy.bincount(train))[::-1]
-    index_mapping = {old: new for old, new in zip(ordered_tokens, count())}
+    index_mapping = {old: new for old, new in zip(ordered_tokens,
+                                                  range(vocab_size))}
     train = [index_mapping.get(old, 591) for old in train]
     valid = [index_mapping.get(old, 591) for old in valid]
     return train, valid, {i: j for i, j in zip(count(), numpy.bincount(train))}
