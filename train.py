@@ -1,4 +1,5 @@
 import logging
+import numpy
 
 from blocks.algorithms import GradientDescent, Scale, CompositeRule
 from blocks.dump import load_parameter_values
@@ -11,6 +12,7 @@ from blocks.extensions.saveload import Dump
 from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
+from theano import config
 from theano import tensor
 
 
@@ -25,7 +27,7 @@ class Decreaser(object):
         self.scalar = scalar
 
     def __call__(self, t, x):
-        return x * self.scalar
+        return numpy.array(x * self.scalar).astype(config.floatX)
 
 
 class LearningRateHalver(SharedVariableModifier):
