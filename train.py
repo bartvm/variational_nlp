@@ -1,4 +1,5 @@
 import logging
+import numpy
 
 from blocks.algorithms import GradientDescent, Scale, CompositeRule
 from blocks.dump import load_parameter_values
@@ -7,9 +8,11 @@ from blocks.extensions import Printing
 from blocks.extensions.monitoring import (DataStreamMonitoring,
                                           TrainingDataMonitoring)
 from blocks.extensions.training import SharedVariableModifier
+from blocks.extensions.saveload import Dump
 from blocks.graph import ComputationGraph
 from blocks.main_loop import MainLoop
 from blocks.model import Model
+from theano import config
 from theano import tensor
 
 
@@ -24,7 +27,7 @@ class Decreaser(object):
         self.scalar = scalar
 
     def __call__(self, t, x):
-        return x * self.scalar
+        return numpy.array(x * self.scalar).astype(config.floatX)
 
 
 class LearningRateHalver(SharedVariableModifier):
@@ -88,14 +91,8 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
                                  valid_stream, prefix='valid'),
             monitor_lr,
             lr_halver,
-            Printing()
+            Printing(),
+            Dump(save_location, after_epoch=True)
         ]
     )
     main_loop.run()
-
-    # Save the main loop
-    if save_location is not None:
-        logger.info('Saving the main loop...')
-        dump_manager = MainLoopDumpManager(save_location)
-        dump_manager.dump(main_loop)
-        logger.info('Saved')
