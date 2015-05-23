@@ -4,8 +4,11 @@ import logging
 import os
 import sys
 
-from blocks.bricks import Rectifier, MLP, Softmax
+from blocks.bricks import Rectifier, MLP, Softmax, Linear
 from blocks.bricks.lookup import LookupTable
+from blocks.graph import ComputationGraph, apply_dropout
+from blocks.roles import INPUT
+from blocks.filter import VariableFilter
 from blocks.initialization import IsotropicGaussian, Constant
 from fuel.transformers import Batch
 from fuel.schemes import ConstantScheme
@@ -55,8 +58,12 @@ if __name__ == "__main__":
     minibatch_size = 512
     num_batches = 100000 / minibatch_size
 
-    y, y_hat, cost = construct_model(vocab_size, 256, 6, [128],
+    y, y_hat, cost = construct_model(vocab_size, 512, 6, [256],
                                      [Rectifier()])
+    cg = ComputationGraph([y, y_hat, cost])
+    y, y_hat, cost = apply_dropout(
+        cg, VariableFilter(roles=[INPUT], bricks=[Linear])(cg.variables), 0.5
+    ).outputs
     train, valid, id_to_freq_mapping = get_data(train_size, vocab_size)
 
     # Make variational
