@@ -10,8 +10,6 @@ from blocks.graph import ComputationGraph, apply_dropout
 from blocks.roles import INPUT
 from blocks.filter import VariableFilter
 from blocks.initialization import IsotropicGaussian, Constant
-from fuel.transformers import Batch
-from fuel.schemes import ConstantScheme
 from theano import tensor
 
 
@@ -28,7 +26,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
                     activations):
     # Construct the model
     x = tensor.lmatrix('features')
-    y = tensor.lvector('targets')
+    y = tensor.lmatrix('targets')
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
     hidden = MLP(activations=activations + [None],
@@ -39,7 +37,7 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     embeddings = embeddings.flatten(ndim=2)  # Concatenate embeddings
     activations = hidden.apply(embeddings)
     y_hat = Softmax().apply(activations)
-    cost = Softmax().categorical_cross_entropy(y, activations)
+    cost = Softmax().categorical_cross_entropy(y.flatten(), activations)
 
     # Initialize parameters
     lookup.weights_init = IsotropicGaussian(0.001)
@@ -55,13 +53,13 @@ if __name__ == "__main__":
     # Test
     vocab_size = int(os.environ.get('VOCAB_SIZE', 10000))
     train_size = int(os.environ.get('TRAIN_SIZE', 929589))
-    minibatch_size = 512
+    minibatch_size = 256
     num_batches = 100000 / minibatch_size
 
     y, y_hat, cost = construct_model(vocab_size, 512, 6, [256],
                                      [Rectifier()])
-    cg = ComputationGraph([y, y_hat, cost])
-    y, y_hat, cost = apply_dropout(
+    cg = ComputationGraph([y_hat, cost])
+    dropped_y_hat, dropped_cost = apply_dropout(
         cg, VariableFilter(roles=[INPUT], bricks=[Linear])(cg.variables), 0.5
     ).outputs
     train, valid, id_to_freq_mapping = get_data(train_size, vocab_size)
@@ -69,7 +67,7 @@ if __name__ == "__main__":
     # Make variational
     if len(sys.argv) > 1 and sys.argv[1] == 'variational':
         logger.info('Using the variational model')
-        cost, sigmas = make_variational_model(cost)
+        dropped_cost, sigmas = make_variational_model(dropped_cost)
     else:
         sigmas = None
 
@@ -79,16 +77,14 @@ if __name__ == "__main__":
                                           name='freq_costs')
 
     # Build training and validation datasets
-    train_stream = Batch(get_ngram_stream(6, train),
-                         iteration_scheme=ConstantScheme(minibatch_size))
-    valid_stream = Batch(get_ngram_stream(6, valid),
-                         iteration_scheme=ConstantScheme(minibatch_size))
+    train_stream = get_ngram_stream(6, train, minibatch_size)
+    valid_stream = get_ngram_stream(6, valid, minibatch_size)
 
     # Train
     sys.stdout = sys.stderr
-    print('Hello world?')
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, num_batches=num_batches,
                 load_location=None,
                 save_location='feedforward_{}_{}'.format(vocab_size,
-                                                         train_size))
+                                                         train_size),
+                dropped_cost=dropped_cost)

@@ -2,11 +2,11 @@ import os
 from itertools import count
 
 import numpy
+from numpy.lib.stride_tricks import as_strided
 from fuel import config
 from fuel.datasets import IndexableDataset
-from fuel.schemes import SequentialExampleScheme
+from fuel.schemes import ShuffledScheme
 from fuel.streams import DataStream
-from fuel.transformers.text import NGrams
 
 path = os.path.join(config.data_path, 'PennTreebankCorpus')
 
@@ -27,8 +27,14 @@ def get_data(data_size, vocab_size):
     return train, valid, {i: j for i, j in zip(count(), numpy.bincount(train))}
 
 
-def get_ngram_stream(ngram_order, train):
-    dataset = IndexableDataset({'features': [train]})
-    stream = DataStream(dataset, iteration_scheme=SequentialExampleScheme(1))
-    n_gram_stream = NGrams(ngram_order, stream)
-    return n_gram_stream
+def get_ngram_stream(ngram_order, train, batch_size):
+    train = numpy.array(train)
+    data = as_strided(train, shape=(train.size - ngram_order, ngram_order + 1),
+                      strides=(train.itemsize, train.itemsize))
+    dataset = IndexableDataset({'features': data[:, :ngram_order],
+                                'targets': data[:, ngram_order:]})
+    stream = DataStream(
+        dataset, iteration_scheme=ShuffledScheme(train.size - ngram_order,
+                                                 batch_size)
+    )
+    return stream

@@ -24,6 +24,7 @@ class FrequencyLikelihood(MonitoredQuantity):
         self.total_seen = defaultdict(int)
 
     def accumulate(self, targets, predictions, masks=None):
+        targets = targets.flatten()
         for i, (target, prediction) in \
                 enumerate(zip(targets, predictions)):
             if masks is None or masks[i]:

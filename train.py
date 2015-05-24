@@ -1,9 +1,8 @@
 import logging
 import numpy
 
-from blocks.algorithms import GradientDescent, Scale, CompositeRule
+from blocks.algorithms import GradientDescent, Scale, CompositeRule, Momentum
 from blocks.dump import load_parameter_values
-from blocks.dump import MainLoopDumpManager
 from blocks.extensions import Printing
 from blocks.extensions.monitoring import (DataStreamMonitoring,
                                           TrainingDataMonitoring)
@@ -35,6 +34,7 @@ class LearningRateHalver(SharedVariableModifier):
         self.record_name = record_name
         self.lr = lr
         self.prev_value = float('inf')
+        self.counter = 0
         super(LearningRateHalver, self).__init__(self.lr,
                                                  Decreaser(scalar).__call__,
                                                  **kwargs)
@@ -49,13 +49,15 @@ class LearningRateHalver(SharedVariableModifier):
 
 def train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=None, num_batches=None, load_location=None,
-                save_location=None, learning_rate=0.1):
+                save_location=None, learning_rate=0.1, dropped_cost=None):
+    if dropped_cost is None:
+        dropped_cost = cost
     cost.name = 'nll'
     perplexity = 2 ** (cost / tensor.log(2))
     perplexity.name = 'ppl'
 
     # Define the model
-    model = Model(cost)
+    model = Model(dropped_cost)
 
     # Load the parameters from a dumped model
     if load_location is not None:
@@ -63,8 +65,8 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
         model.set_param_values(load_parameter_values(load_location))
 
     # Set up the training procedure
-    cg = ComputationGraph(cost)
-    if VARIATIONAL_COST in cost.tag.roles:
+    cg = ComputationGraph(dropped_cost)
+    if VARIATIONAL_COST in dropped_cost.tag.roles:
         if sigmas is None:
             raise ValueError('need sigmas to train variational cost')
         step_rule = CompositeRule([VariationalInference(cg.outputs[0], sigmas,
@@ -73,14 +75,14 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
                                    Scale(learning_rate=learning_rate)])
         lr = step_rule.components[1].learning_rate
     else:
-        step_rule = Scale(learning_rate=learning_rate)
+        step_rule = Momentum(learning_rate=learning_rate, momentum=0.5)
         lr = step_rule.learning_rate
 
     lr.name = "learning_rate"
     monitor_lr = TrainingDataMonitoring([lr], after_epoch=True)
-    lr_halver = LearningRateHalver("valid_nll", lr, 0.9, after_epoch=True,
+    lr_halver = LearningRateHalver("valid_nll", lr, 0.95, after_epoch=True,
                                    after_batch=False)
-    algorithm = GradientDescent(cost=cost, step_rule=step_rule,
+    algorithm = GradientDescent(cost=dropped_cost, step_rule=step_rule,
                                 params=cg.parameters)
     main_loop = MainLoop(
         model=model,
@@ -89,6 +91,9 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
         extensions=[
             DataStreamMonitoring([freq_likelihood, cost, perplexity],
                                  valid_stream, prefix='valid'),
+            DataStreamMonitoring([cost, perplexity],
+                                 train_stream, prefix='train',
+                                 after_epoch=False, every_n_epochs=5),
             monitor_lr,
             lr_halver,
             Printing(),

@@ -99,6 +99,8 @@ if __name__ == "__main__":
                    for key, val in log.items() if 'valid_freq_costs' in val]
     # Extract the necessary axis
     Z = np.asarray(valid_costs)[:, :, 2]
+    print(np.asarray(valid_costs)[:, :, 1] * np.asarray(valid_costs)[:, :, 2] /
+          np.asarray(valid_costs)[:, :, 1].sum()).sum()
     freq = np.asarray(valid_costs)[0, :, 0]
 
     smooth_diag = 0
