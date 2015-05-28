@@ -49,6 +49,39 @@ def construct_model(vocab_size, embedding_dim, ngram_order, hidden_dims,
     return y, y_hat, cost
 
 
+from blocks.dump import load_parameter_values
+from blocks.model import Model
+import numpy as np
+
+
+def custom_init(cost, id_to_freq_mapping, train_size, vocab_size,
+                load_location=None, dropped_cost=None):
+
+    if dropped_cost is None:
+        dropped_cost = cost
+
+    # Define the model
+    model = Model(dropped_cost)
+
+    # Load the parameters from a dumped model
+    if load_location is not None:
+        logger.info('Loading parameters...')
+        model.set_param_values(load_parameter_values(load_location))
+
+    cg = ComputationGraph(dropped_cost)
+    print(cg.parameters)
+
+    b_init = np.zeros((vocab_size)).astype(np.float32)
+    for i, val in enumerate(id_to_freq_mapping.values()):
+        b_init[i] = val / (train_size * 1.)
+
+    rval = np.log(b_init)
+    rval -= rval.mean()
+    cg.parameters[0].set_value(rval)
+
+    return cost, dropped_cost
+
+
 if __name__ == "__main__":
     # Test
     vocab_size = int(os.environ.get('VOCAB_SIZE', 10000))
@@ -58,6 +91,7 @@ if __name__ == "__main__":
 
     y, y_hat, cost = construct_model(vocab_size, 512, 6, [256],
                                      [Rectifier()])
+
     cg = ComputationGraph([y_hat, cost])
     dropped_y_hat, dropped_cost = apply_dropout(
         cg, VariableFilter(roles=[INPUT], bricks=[Linear])(cg.variables), 0.5
@@ -82,9 +116,14 @@ if __name__ == "__main__":
 
     # Train
     sys.stdout = sys.stderr
+
+    cost, dropped_cost = custom_init(cost, id_to_freq_mapping,
+                                     train_size, vocab_size,
+                                     load_location="params.npz",
+                                     dropped_cost=dropped_cost)
+
     train_model(cost, train_stream, valid_stream, freq_likelihood,
                 sigmas=sigmas, num_batches=num_batches,
-                load_location=None,
                 save_location='feedforward_{}_{}'.format(vocab_size,
                                                          train_size),
                 dropped_cost=dropped_cost)

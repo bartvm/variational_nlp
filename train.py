@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class Decreaser(object):
+
     def __init__(self, scalar):
         self.scalar = scalar
 
@@ -30,6 +31,7 @@ class Decreaser(object):
 
 
 class LearningRateHalver(SharedVariableModifier):
+
     def __init__(self, record_name, lr, scalar, **kwargs):
         self.record_name = record_name
         self.lr = lr
@@ -48,7 +50,7 @@ class LearningRateHalver(SharedVariableModifier):
 
 
 def train_model(cost, train_stream, valid_stream, freq_likelihood,
-                sigmas=None, num_batches=None, load_location=None,
+                sigmas=None, num_batches=None,
                 save_location=None, learning_rate=0.1, dropped_cost=None):
     if dropped_cost is None:
         dropped_cost = cost
@@ -59,13 +61,9 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
     # Define the model
     model = Model(dropped_cost)
 
-    # Load the parameters from a dumped model
-    if load_location is not None:
-        logger.info('Loading parameters...')
-        model.set_param_values(load_parameter_values(load_location))
-
     # Set up the training procedure
     cg = ComputationGraph(dropped_cost)
+
     if VARIATIONAL_COST in dropped_cost.tag.roles:
         if sigmas is None:
             raise ValueError('need sigmas to train variational cost')

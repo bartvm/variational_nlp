@@ -3,7 +3,7 @@ import sys
 
 from blocks.algorithms import GradientDescent, Scale
 from blocks.bricks import Linear, Softmax, Tanh
-from blocks.bricks.recurrent import SimpleRecurrent
+from blocks.bricks.recurrent import LSTM
 from blocks.bricks.lookup import LookupTable
 from blocks.dump import load_parameter_values
 from blocks.dump import MainLoopDumpManager
@@ -39,10 +39,10 @@ def construct_model_r(vocab_size, embedding_dim, hidden_dim,
     y_mask = tensor.fmatrix('targets_mask')
 
     lookup = LookupTable(length=vocab_size, dim=embedding_dim, name='lookup')
-    linear = Linear(input_dim=embedding_dim, output_dim=hidden_dim,
+    linear = Linear(input_dim=embedding_dim, output_dim=4 * hidden_dim,
                     name="linear")
-    hidden = SimpleRecurrent(dim=hidden_dim, activation=activation,
-                             name='hidden_recurrent')
+    hidden = LSTM(dim=hidden_dim, activation=activation,
+                  name='hidden_recurrent')
     top_linear = Linear(input_dim=hidden_dim, output_dim=vocab_size,
                         name="top_linear")
 
@@ -53,7 +53,7 @@ def construct_model_r(vocab_size, embedding_dim, hidden_dim,
     pre_recurrent = linear.apply(embeddings)
     after_recurrent = hidden.apply(inputs=pre_recurrent,
                                    mask=x_mask.T)[:-1]
-    after_recurrent_last = after_recurrent[-1]
+
     presoft = top_linear.apply(after_recurrent)
 
     # Define the cost
@@ -99,11 +99,46 @@ def construct_model_r(vocab_size, embedding_dim, hidden_dim,
 if __name__ == "__main__":
     # Test
 
-    vocab_size = 50000
-    max_sentence_length = 35
-    minibatch_size = 64
-    # B is the number of minibatches (formula 18)
-    B = 237760 / (minibatch_size * 1.)
+    vocab_size = int(os.environ.get('VOCAB_SIZE', 10000))
+    train_size = int(os.environ.get('TRAIN_SIZE', 929589))
+    minibatch_size = 256
+    num_batches = 100000 / minibatch_size
+
+    y, y_hat, cost, y_mask = construct_model_r(50000, 256, 100, Tanh())
+    vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
+    
+    cg = ComputationGraph([y_hat, cost])
+    dropped_y_hat, dropped_cost = apply_dropout(
+        cg, VariableFilter(roles=[INPUT], bricks=[Linear])(cg.variables), 0.5
+    ).outputs
+    train, valid, id_to_freq_mapping = get_data(train_size, vocab_size)
+
+    # Make variational
+    if len(sys.argv) > 1 and sys.argv[1] == 'variational':
+        logger.info('Using the variational model')
+        dropped_cost, sigmas = make_variational_model(dropped_cost)
+    else:
+        sigmas = None
+
+    # Create monitoring channel
+    freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
+                                          requires=[y, y_hat],
+                                          name='freq_costs')
+
+    # Build training and validation datasets
+    train_stream = get_ngram_stream(6, train, minibatch_size)
+    valid_stream = get_ngram_stream(6, valid, minibatch_size)
+
+    # Train
+    sys.stdout = sys.stderr
+    train_model(cost, train_stream, valid_stream, freq_likelihood,
+                sigmas=sigmas, num_batches=num_batches,
+                load_location=None,
+                save_location='feedforward_{}_{}'.format(vocab_size,
+                                                         train_size),
+                dropped_cost=dropped_cost)
+
+
 
     y, y_hat, cost, y_mask = construct_model_r(50000, 256, 100, Tanh())
     vocabulary, id_to_freq_mapping = get_vocabulary(vocab_size, True)
@@ -120,11 +155,13 @@ if __name__ == "__main__":
                                           requires=[y, y_hat, y_mask],
                                           name='freq_costs')
     # Build training and validation datasets
-    train_stream = Padding(Batch(get_sentence_stream('training', [1], vocabulary, max_sentence_length),
-                                 iteration_scheme=ConstantScheme(minibatch_size)))
+    train_stream = Padding(Batch(get_sentence_stream(
+        'training', [1], vocabulary, max_sentence_length),
+        iteration_scheme=ConstantScheme(minibatch_size)))
 
-    valid_stream = Padding(Batch(get_sentence_stream('heldout', [1], vocabulary, max_sentence_length),
-                                 iteration_scheme=ConstantScheme(minibatch_size)))
+    valid_stream = Padding(Batch(get_sentence_stream(
+        'heldout', [1], vocabulary, max_sentence_length),
+        iteration_scheme=ConstantScheme(minibatch_size)))
 
     # Train
     train_model(cost, train_stream, valid_stream, freq_likelihood,
