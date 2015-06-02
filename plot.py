@@ -95,7 +95,7 @@ if __name__ == "__main__":
         log = cPickle.load(f)
 
     # Get the validation costs from the log
-    valid_costs = [val['valid_freq_costs']
+    valid_costs = [val['valid_real_freq_costs']
                    for key, val in log.items() if 'valid_freq_costs' in val]
     # Extract the necessary axis
     Z = np.asarray(valid_costs)[:, :, 2]

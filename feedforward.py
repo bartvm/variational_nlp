@@ -54,7 +54,8 @@ if __name__ == "__main__":
     vocab_size = int(os.environ.get('VOCAB_SIZE', 10000))
     train_size = int(os.environ.get('TRAIN_SIZE', 929589))
     minibatch_size = 256
-    num_batches = 100000 / minibatch_size
+    # num_batches = train_size / minibatch_size
+    num_batches = 1. / 30
 
     y, y_hat, cost = construct_model(vocab_size, 512, 6, [256],
                                      [Rectifier()])
@@ -67,14 +68,17 @@ if __name__ == "__main__":
     # Make variational
     if len(sys.argv) > 1 and sys.argv[1] == 'variational':
         logger.info('Using the variational model')
-        dropped_cost, sigmas = make_variational_model(dropped_cost)
+        dropped_cost, sigmas = make_variational_model(cost)
     else:
         sigmas = None
 
     # Create monitoring channel
-    freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
-                                          requires=[y, y_hat],
-                                          name='freq_costs')
+    real_freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
+                                               requires=[y, y_hat],
+                                               name='real_freq_costs')
+    # freq_likelihood = FrequencyLikelihood(id_to_freq_mapping,
+    #                                       requires=[y, dropped_y_hat],
+    #                                       name='freq_costs')
 
     # Build training and validation datasets
     train_stream = get_ngram_stream(6, train, minibatch_size)
@@ -82,9 +86,11 @@ if __name__ == "__main__":
 
     # Train
     sys.stdout = sys.stderr
-    train_model(cost, train_stream, valid_stream, freq_likelihood,
+    train_model(cost, train_stream, valid_stream,
+                [#freq_likelihood,
+                 real_freq_likelihood],
                 sigmas=sigmas, num_batches=num_batches,
-                load_location=None,
-                save_location='feedforward_{}_{}'.format(vocab_size,
-                                                         train_size),
-                dropped_cost=dropped_cost)
+                load_location='params.npz',
+                save_location='/Tmp/vanmerb/feedforward_{}_{}'.format(
+                    vocab_size, train_size)) #,
+                # dropped_cost=dropped_cost)

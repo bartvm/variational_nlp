@@ -52,9 +52,12 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
                 save_location=None, learning_rate=0.1, dropped_cost=None):
     if dropped_cost is None:
         dropped_cost = cost
-    cost.name = 'nll'
-    perplexity = 2 ** (cost / tensor.log(2))
+    cost.name = 'real_nll'
+    dropped_cost.name = 'nll'
+    perplexity = 2 ** (dropped_cost / tensor.log(2))
     perplexity.name = 'ppl'
+    real_perplexity = 2 ** (cost / tensor.log(2))
+    real_perplexity.name = 'real_ppl'
 
     # Define the model
     model = Model(dropped_cost)
@@ -89,9 +92,14 @@ def train_model(cost, train_stream, valid_stream, freq_likelihood,
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[
-            DataStreamMonitoring([freq_likelihood, cost, perplexity],
+            DataStreamMonitoring(freq_likelihood + [
+                                  cost, #dropped_cost,
+                                  perplexity#, real_perplexity
+                                  ],
                                  valid_stream, prefix='valid'),
-            DataStreamMonitoring([cost, perplexity],
+            DataStreamMonitoring([cost, #dropped_cost,
+                                  perplexity#, real_perplexity
+                                  ],
                                  train_stream, prefix='train',
                                  after_epoch=False, every_n_epochs=5),
             monitor_lr,
